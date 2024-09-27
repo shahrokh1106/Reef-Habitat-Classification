@@ -15,14 +15,12 @@ def download_image(url, filename):
     except:
         return os.path.basename(filename).split('.')[0]
 
-
 if __name__ == '__main__':
     train_df = pd.read_csv(os.path.join("dataset","dataset_csv_files","training_datasets","train_df.csv"),low_memory=False)
     valid_df = pd.read_csv(os.path.join("dataset","dataset_csv_files","training_datasets","valid_df.csv"),low_memory=False)
     test_df = pd.read_csv(os.path.join("dataset","dataset_csv_files","training_datasets","test_df.csv"),low_memory=False)
     test_ex_df = pd.read_csv(os.path.join("dataset","dataset_csv_files","training_datasets","test_ex_df.csv"),low_memory=False)
     dataset_final = pd.concat([train_df, valid_df, test_df, test_ex_df])
-
     valid_extensions = ('.jpg', '.jpeg', '.png', '.JPG', '.PNG')
     if not os.path.exists(os.path.join("dataset","frames")):
         os.makedirs(os.path.join("dataset","frames"))
