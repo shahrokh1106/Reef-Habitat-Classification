@@ -1,4 +1,6 @@
 /dataset/frames/*.JPG
 /dataset/frames/*.jpeg
+/dataset/frames_with_whole_annotations/*.JPG
+/dataset/frames_with_whole_annotations/*.jpeg
 /dataset/patches/*
 /saved_models/*
