@@ -1,3 +1,4 @@
 /dataset/frames/*.JPG
 /dataset/frames/*.jpeg
 /dataset/patches/*
+/saved_models/*
