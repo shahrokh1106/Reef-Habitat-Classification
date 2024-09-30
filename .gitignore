@@ -4,3 +4,4 @@
 /dataset/frames_with_whole_annotations/*.jpeg
 /dataset/patches/*
 /saved_models/*
+/dataset/grouped_frames_with_whole_annotations/*
