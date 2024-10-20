@@ -10,7 +10,7 @@ if __name__ == '__main__':
     class_names = list(class_dict.keys())
     source_path = os.path.join("dataset","frames_with_whole_annotations")
     if not os.path.exists(source_path):
-        "Plase first download frames_with_whole_annotations using download_frames_with_whole_annotations.py"
+        print("Plase first download frames_with_whole_annotations using download_frames_with_whole_annotations.py")
     else:
         output_path = os.path.join("dataset","grouped_frames_with_whole_annotations")
         if not os.path.exists(output_path):
