@@ -59,6 +59,17 @@ from tensorflow.keras.models import Model
 from tensorflow.keras.layers import Dense, GlobalAveragePooling2D, Input, Concatenate, Layer
 from tensorflow.keras.initializers import Constant 
 
+
+class MultiHeadSelfAttention(layers.Layer):
+        def __init__(self, num_heads, key_dim):
+            super(MultiHeadSelfAttention, self).__init__()
+            self.attention = layers.MultiHeadAttention(num_heads=num_heads, key_dim=key_dim)
+
+        def call(self, inputs):
+            # Self-attention: query, key, and value are the same
+            return self.attention(inputs, inputs)
+        
+
 ############################################################################################################################
 def get_feature_extractor (model_name, include_top=False, weights='imagenet'):
     if model_name == "efficientL":
@@ -426,7 +437,8 @@ class MulticlassClassifier():
             return 299,299
         else:
             return 224,224
-
+        
+    
     def get_model(self):
         metrics = ["acc",
             tf.keras.metrics.Precision(name='precision'),
@@ -435,20 +447,30 @@ class MulticlassClassifier():
         
         base_model = get_feature_extractor (self.model_name, include_top=False, weights='imagenet')
         base_model.trainable = self.full_training_flag
-        if self.dense_number!=0:
-            model = tf.keras.Sequential([
-                base_model,
-                layers.GlobalAveragePooling2D(),
-                layers.Dense(self.dense_number, activation='relu', name='hidden_layer_1'),
-                layers.Dropout(self.dropout_ratio),
-                layers.Dense(len(self.train_class_names), activation=self.last_activation, name='output')], name="multiclass_classifier")
-        else:
-            model = tf.keras.Sequential([
-                base_model,
-                layers.GlobalAveragePooling2D(),
-                layers.BatchNormalization(),
-                layers.Dropout(self.dropout_ratio),
-                layers.Dense(len(self.train_class_names), activation=self.last_activation, name='output')], name="multiclass_classifier")
+
+        model = tf.keras.Sequential([
+                                    base_model,  # Backbone
+                                    layers.GlobalAveragePooling2D(),  # Reduce (batch_size, 8, 8, 2048) to (1, 2048)
+                                    layers.Reshape((1, -1)),  # Reshape to (batch_size, 1, 2048) for attention
+                                    MultiHeadSelfAttention(num_heads=4, key_dim=128),
+                                    layers.Flatten(),
+                                    layers.Dense(self.dense_number, activation='relu', name='hidden_layer_1'),
+                                    layers.Dropout(self.dropout_ratio),
+                                    layers.Dense(len(self.train_class_names), activation=self.last_activation, name='output')], name="multiclass_classifier")
+        # if self.dense_number!=0:
+        #     model = tf.keras.Sequential([
+        #         base_model,
+        #         layers.GlobalAveragePooling2D(),
+        #         layers.Dense(self.dense_number, activation='relu', name='hidden_layer_1'),
+        #         layers.Dropout(self.dropout_ratio),
+        #         layers.Dense(len(self.train_class_names), activation=self.last_activation, name='output')], name="multiclass_classifier")
+        # else:
+        #     model = tf.keras.Sequential([
+        #         base_model,
+        #         layers.GlobalAveragePooling2D(),
+        #         layers.BatchNormalization(),
+        #         layers.Dropout(self.dropout_ratio),
+        #         layers.Dense(len(self.train_class_names), activation=self.last_activation, name='output')], name="multiclass_classifier")
         if self.lr_schedule_flag:
             model.compile(
                 optimizer=tf.keras.optimizers.Adamax(learning_rate=self.lr_schedule),
