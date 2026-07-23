@@ -143,7 +143,7 @@ class Habibot():
         frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         frame = cv2.resize(frame, (3648, 2736))
         i_to_c_frame = {0: "Reef-Urchin-Barren", 1: "Reef-Grazed",2: "Reef-Kelp", 3: "Reef-Vegetated",4: "Unconsolidated"}
-        i_to_c_frame = {0: "Reef-Urchin-Barren", 1: "Reef-BrLfa",2: "Reef-Kelp", 3: "Reef-FnEc",4: "Unconsolidated"}
+        i_to_c_frame = {0: "Reef-Urchin-Barren", 1: "Reef-BrLfa",2: "Reef-Kelp", 3: "Reef-FnEc",4: "Unconsolidated"} # renaming to the updated class names
         patch_conf_threshold = 0.7
         img,patches_boxes,patches_centers,patches_pred_ratios_dict,patches_preds_categorial,patches_probs,frame_probs,urchin_boxes = self.get_all_models_predictions(frame)
 

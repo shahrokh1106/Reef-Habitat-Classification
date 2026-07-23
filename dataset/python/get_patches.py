@@ -40,7 +40,7 @@ if __name__ == '__main__':
     test_df['id'] = test_df.index
     test_ex_df['id'] = test_ex_df.index
 
-    dataset_names = ["test_extra"]
+    dataset_names = ["train", "valid", "test", "test_extra"]
     for dataset_name in dataset_names:
         save_patches_path = os.path.join("dataset", "patches", dataset_name)
         if not os.path.exists(save_patches_path):

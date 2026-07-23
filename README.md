@@ -61,3 +61,7 @@ From the repository root:
 python python/demo.py
 ```
 If setup is correct, the script loads the frame classifier, patch classifier, and Urchin-Detector, runs an example image, and writes the output figure in fig folder.
+
+### 7. Download and prepare datasets (training and evaluation)
+
+To download annotation data, build train/validation/test splits, and prepare frame and patch datasets for training or evaluation, see **[DATASET.md](DATASET.md)**.
