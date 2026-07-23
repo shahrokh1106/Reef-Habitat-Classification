@@ -62,9 +62,9 @@ class HabitatClassifier():
         self.patch_classifier = self.load_classifier(self.patch_classifier_path)
         self.patch_input_size = self.patch_classifier.input.shape[1]
         self.urch_detector = self.load_urchin_detector()
-        self.i_to_c_frame = {0: "Reef-Urchin-Barren", 1: "Reef-Grazed",2: "Reef-Kelp", 3: "Reef-Vegetated",4: "Unconsolidated"}
+        self.i_to_c_frame = {0: "Reef-Urchin-Barren", 1: "Reef-BrLfa",2: "Reef-Kelp", 3: "Reef-FnEc",4: "Unconsolidated"}
         self.c_to_i_frame = {value:key for key,value in self.i_to_c_frame.items()}
-        self.i_to_c_patch = {0: 'Carpophyllum',1: 'Ecklonia',2: 'Foliose Algae',3: 'Other canopy',4: 'Unconsolidated',5: 'Urchin',6: 'Grazed rock'}
+        self.i_to_c_patch = {0: 'Carpophyllum',1: 'Ecklonia',2: 'Foliose algae',3: 'Other canopy',4: 'Unconsolidated',5: 'Urchin',6: 'BrLfa'}
         self.c_to_i_patch = {value:key for key,value in self.i_to_c_patch.items()}
         self.crop_ratio = crop_ratio
         self.patch_conf_threshold = 0.7
@@ -129,6 +129,7 @@ class HabitatClassifier():
         img,patches,boxes,centers = extract_grid_patches(image)
         patches_array = np.stack(patches, axis=0)
         patches_tensor = preprocess_patches (patches_array,self.patch_input_size)
+
         patches_probs = self.patch_classifier.predict(patches_tensor,batch_size=len(patches),verbose=0)
         patches_preds_binary = np.zeros_like(patches_probs)
         patches_preds_binary[np.arange(len(patches_probs)), np.argmax(patches_probs, axis=1)] = 1
@@ -141,7 +142,7 @@ class HabitatClassifier():
         
         filtered_patches_preds_categorial = patches_preds_categorial[~low_confidence_mask]
         unique_elements, counts = np.unique(filtered_patches_preds_categorial, return_counts=True)
-    
+
         if 5 in unique_elements:
             # index 5 is for urchin, should not be considered for the percentage computation
             index = np.where(unique_elements == 5)[0][0]
@@ -153,10 +154,11 @@ class HabitatClassifier():
     
         percentages = (counts / total_count) * 100 if total_count > 0 else np.zeros_like(counts)
        
-        patches_pred_ratios_dict = {'Carpophyllum': 0.0, 'Ecklonia': 0.0, 'Foliose Algae': 0.0,'Other canopy': 0.0, 'Unconsolidated': 0.0, 'Grazed rock': 0.0, 'Unscorable': 0.0}
+        patches_pred_ratios_dict = {'Carpophyllum': 0.0, 'Ecklonia': 0.0, 'Foliose algae': 0.0,'Other canopy': 0.0, 'Unconsolidated': 0.0, 'BrLfa': 0.0, 'Unscorable': 0.0}
         for i, e in enumerate(unique_elements):
             patches_pred_ratios_dict[self.i_to_c_patch[e]] = percentages[i]
-  
+   
+        
         total_valid_patches = len(patches_preds_categorial)  # Original number of patches
         patches_pred_ratios_dict['Unscorable'] = (total_unscorable / total_valid_patches) * 100 if total_valid_patches > 0 else 0.
 
@@ -210,40 +212,62 @@ class HabitatClassifier():
                 cv2.putText(legend_background, "Unscorable"+f" ({np.round(patches_pred_ratios_dict['Unscorable'],1)}%)", (x_offset + i * spacing + rect_size + 10, 10 + rect_size - text_offset), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2, cv2.LINE_AA)
 
         cv2.putText(legend_background, f"Initial Frame Prediction: {initial_frame_level_prediction}", (50,x_offset +100), cv2.FONT_HERSHEY_SIMPLEX, 2, (255, 255, 255), 3, cv2.LINE_AA)
-            
+        
+        rule_numbers = []
+
         recommendation = "None"
         # Initial label conversion
-        if initial_frame_level_prediction == "Reef-Grazed":
+        if initial_frame_level_prediction == "Reef-BrLfa":
             if len(urchin_boxes)>0:
                 initial_frame_level_prediction = "Reef-Urchin-Barren"
+                rule_numbers.append("#1")
         elif initial_frame_level_prediction == "Reef-Urchin-Barren":
             if len(urchin_boxes)==0:
-                initial_frame_level_prediction = "Reef-Grazed"
+                initial_frame_level_prediction = "Reef-BrLfa"
+                rule_numbers.append("#2")
 
         # rules-based label conversion
         if np.max(frame_probs)<=0.6:
             if len(urchin_boxes)==0:
-                recommendation = "Reef-Partial-Grazed (Review)"
+                recommendation = "Reef-Partial-BrLfa"
+                rule_numbers.append("#3")
             else:
-                if patches_pred_ratios_dict['Grazed rock']>70:
-                    recommendation = "Reef-Urchin-Barren (Review)"
+                if patches_pred_ratios_dict['BrLfa']>70:
+                    recommendation = "Reef-Urchin-Barren"
+                    rule_numbers.append("#4")
                 else:
-                    recommendation = "Reef-Partial-Urchin-Barren (Review)"
+                    recommendation = "Reef-Partial-Urchin-Barren"
+                    rule_numbers.append("#5")
         elif initial_frame_level_prediction == "Reef-Kelp":
-            if (patches_pred_ratios_dict['Grazed rock']>25 and len(urchin_boxes)>0) or len(urchin_boxes)>0: 
-                recommendation = "Reef-Partial-Urchin-Barren (Review)"
-        elif initial_frame_level_prediction == "Reef-Vegetated":
-            if (patches_pred_ratios_dict['Grazed rock']>25 and len(urchin_boxes)>0) or len(urchin_boxes)>0:  
-                recommendation = "Reef-Partial-Urchin-Barren (Review)"
+            if (patches_pred_ratios_dict['BrLfa']>25 and len(urchin_boxes)>0) or len(urchin_boxes)>0: 
+                recommendation = "Reef-Partial-Urchin-Barren"
+                rule_numbers.append("#6")
+            elif (patches_pred_ratios_dict['BrLfa']>25 and len(urchin_boxes)==0):
+                recommendation = "Reef-Partial-BrLfa"
+                rule_numbers.append("#7")
+        elif initial_frame_level_prediction == "Reef-FnEc":
+            if (patches_pred_ratios_dict['BrLfa']>25 and len(urchin_boxes)>0) or len(urchin_boxes)>0:  
+                recommendation = "Reef-Partial-Urchin-Barren"
+                rule_numbers.append("#8")
+            elif (patches_pred_ratios_dict['BrLfa']>25 and len(urchin_boxes)==0):
+                    recommendation = "Reef-Partial-BrLfa"
+                    rule_numbers.append("#9")
         elif initial_frame_level_prediction == "Reef-Urchin-Barren":
-            if patches_pred_ratios_dict['Carpophyllum']+patches_pred_ratios_dict['Ecklonia']+patches_pred_ratios_dict['Other canopy']+patches_pred_ratios_dict['Foliose Algae']>25:
-                recommendation = "Reef-Partial-Urchin-Barren (Review)"
-        elif initial_frame_level_prediction == "Reef-Grazed":
-            if patches_pred_ratios_dict['Carpophyllum']+patches_pred_ratios_dict['Ecklonia']+patches_pred_ratios_dict['Other canopy']+patches_pred_ratios_dict['Foliose Algae']>25:
-                recommendation = "Reef-Partial-Grazed (Review)"
+            if patches_pred_ratios_dict['Carpophyllum']+patches_pred_ratios_dict['Ecklonia']+patches_pred_ratios_dict['Other canopy']+patches_pred_ratios_dict['Foliose algae']>25:
+                recommendation = "Reef-Partial-Urchin-Barren"
+                rule_numbers.append("#10")
+        elif initial_frame_level_prediction == "Reef-BrLfa":
+            if patches_pred_ratios_dict['Carpophyllum']+patches_pred_ratios_dict['Ecklonia']+patches_pred_ratios_dict['Other canopy']+patches_pred_ratios_dict['Foliose algae']>25:
+                recommendation = "Reef-Partial-BrLfa"
+                rule_numbers.append("#11")
+        elif  initial_frame_level_prediction == "Unconsolidated":
+            if len(urchin_boxes)>0:
+                recommendation = "Reef-Urchin-Barren"
+                rule_numbers.append("#12")
 
         if recommendation=="None":
             recommendation = initial_frame_level_prediction
+            rule_numbers.append("#13")
             
         cv2.putText(legend_background, f"Recommendation: {recommendation}", (1700,x_offset +100), cv2.FONT_HERSHEY_SIMPLEX, 2, (0, 0, 255), 3, cv2.LINE_AA)
         image = np.vstack((image, legend_background))
@@ -318,6 +342,7 @@ def get_density_dicts(samples_path,output_path,frame_classifier_path,patch_class
         images_paths.update({location_name: glob.glob(os.path.join(folders_paths[location_name],"*"))})
         csv_path = location_paths[location_name]
         locations_dfs.update({location_name: pd.read_csv(csv_path)})
+        break
     get_location_map(locations_dfs)
     final_results = {}
     for location_name in locations_dfs.keys():
@@ -327,6 +352,7 @@ def get_density_dicts(samples_path,output_path,frame_classifier_path,patch_class
             final_results.update({location_name:results_dict})
             continue
         results_dict = {}
+
         HClassifier = HabitatClassifier(frame_classifier_path =frame_classifier_path,
                                     patch_classifier_path = patch_classifier_path,
                                     crop_ratio= 0.2)
@@ -359,76 +385,453 @@ def get_density_dicts(samples_path,output_path,frame_classifier_path,patch_class
         combined_dict[key] = merged_df
     return combined_dict
 
-def get_density_heat_maps(combined_dict, output_path=".", output_file="heatmap_maps.html"):
-    output_file = os.path.join(output_path, output_file)
+# def get_density_heat_maps(combined_dict, output_path=".", output_file="heatmap_maps.html"):
+#     output_file = os.path.join(output_path, output_file)
+#     all_points = []
+#     for df in combined_dict.values():
+#         all_points.extend(df[['Y', 'X']].values.tolist())
+#     map_center = [np.mean([p[0] for p in all_points]), np.mean([p[1] for p in all_points])]
+#     m = folium.Map(location=map_center, zoom_start=7)
+#     heatmap_colors = itertools.cycle(["red", "blue", "green", "purple", "orange", "pink", "brown"])
+#     heatmap_colors = {"Reef-Urchin-Barren": "red",
+#                       "Reef-Partial-Urchin-Barren": "orange",
+#                       "Unconsolidated": "blue",
+#                       "Reef-FnEc": "#99ff99",
+#                       "Reef-Kelp": "green",
+#                       "Reef-BrLfa": "purple",
+#                       "Reef-Partial-BrLfa":"pink",
+#                       }
+
+#     # Urchin count heatmap (aggregating values for overlapping points)
+#     urchin_data = []
+#     for df in combined_dict.values():
+#         for _, row in df.iterrows():
+#             urchin_data.append([row['Y'], row['X'], row['urchin_count']])
+#     if urchin_data:
+#         max_urchin = max([x[2] for x in urchin_data]) if urchin_data else 1
+#         urchin_data = [[y, x, count / max_urchin] for y, x, count in urchin_data]
+#         HeatMap(urchin_data, name="Urchin Count", gradient={0.2: "#ffffff", 0.8: "black"}).add_to(m)
+
+#     # Multiclass prediction heatmaps
+#     class_heatmaps = defaultdict(list)
+#     for key, df in combined_dict.items():
+#         for _, row in df.iterrows():
+#             prediction = row['predictions'] 
+#             if prediction == "Reef-Urchin-Barren (Review)":
+#                 prediction="Reef-Urchin-Barren"
+#             if prediction == "Reef-Partial-Urchin-Barren (Review)":
+#                 prediction = "Reef-Partial-Urchin-Barren"
+#             if prediction == "Reef-Partial-Grazed (Review)":
+#                 prediction = "Reef-Partial-BrLfa"
+#             if prediction == "Reef-Partial-Grazed":
+#                 prediction = "Reef-Partial-BrLfa"
+#             if prediction == "Reef-Grazed":
+#                 prediction = "Reef-BrLfa"
+#             if prediction == "Reef-Vegetated":
+#                 prediction = "Reef-FnEc"
+#             class_heatmaps[prediction].append([row['Y'], row['X'], 1])  # Binary heatmap (presence)
+
+
+#     # Add heatmaps for each prediction class
+#     legend_entries = []
+#     for class_name in heatmap_colors.keys():
+#         legend_entries.append((class_name, heatmap_colors[class_name]))
+#     for class_name, data in class_heatmaps.items():
+#         color = heatmap_colors[class_name]
+#         HeatMap(data, name=class_name, gradient={0.1: "#ffffff", 0.7: color},blur=25, radius=20).add_to(m)
+            
+#     folium.LayerControl(collapsed=False).add_to(m)
+#     legend_html = """
+#     {% macro html(this, kwargs) %}
+#     <div style="position: fixed; 
+#                 bottom: 50px; left: 50px; width: 250px; height: auto; 
+#                 background-color: white; z-index:9999; padding: 10px;
+#                 font-size:14px; border-radius:5px;
+#                 box-shadow: 2px 2px 5px rgba(0,0,0,0.3);">
+#         <b>Legend</b><br>
+#         <div><div style="width: 12px; height: 12px; background: black; display: inline-block;"></div> Urchin Count</div>
+#     """
+#     for class_name, color in legend_entries:
+#         legend_html += f"""
+#         <div><div style="width: 12px; height: 12px; background: {color}; display: inline-block;"></div> {class_name}</div>
+#         """
+#     legend_html += "</div>{% endmacro %}"
+#     legend = MacroElement()
+#     legend._template = Template(legend_html)
+#     m.get_root().add_child(legend)
+#     m.save(output_file)
+#     print(f"Heatmap saved to {output_file}")
+# def get_density_heat_maps(combined_dict, output_path=".", output_file="heatmap_maps.html"):
+#     import os
+#     import numpy as np
+#     import folium
+#     from folium import FeatureGroup
+#     from branca.element import MacroElement, Template
+#     from collections import defaultdict
+
+#     output_file = os.path.join(output_path, output_file)
+
+#     # Collect all points for centering
+#     all_points = []
+#     for df in combined_dict.values():
+#         all_points.extend(df[['Y', 'X']].values.tolist())
+#     if len(all_points) == 0:
+#         raise ValueError("No points found in combined_dict")
+
+#     map_center = [np.mean([p[0] for p in all_points]), np.mean([p[1] for p in all_points])]
+#     m = folium.Map(location=map_center, zoom_start=7)
+
+#     # Fixed color mapping per class
+#     heatmap_colors = {
+#         "Reef-Urchin-Barren": "red",
+#         "Reef-Partial-Urchin-Barren": "orange",
+#         "Unconsolidated": "blue",
+#         "Reef-FnEc": "#99ff99",
+#         "Reef-Kelp": "green",
+#         "Reef-BrLfa": "purple",
+#         "Reef-Partial-BrLfa": "pink",
+#     }
+
+#     # -------------------------
+#     # Urchin count as POINTS
+#     # -------------------------
+#     urchin_data = []
+#     for df in combined_dict.values():
+#         for _, row in df.iterrows():
+#             if 'urchin_count' in row:
+#                 urchin_data.append([row['Y'], row['X'], float(row['urchin_count'])])
+
+#     if urchin_data:
+#         max_urchin = max(x[2] for x in urchin_data) or 1.0
+#         fg_urchin = FeatureGroup(name="Urchin Count (points)", show=True)
+#         # radius scales from 2 to 10 pixels
+#         for y, x, count in urchin_data:
+#             val = count / max_urchin
+#             radius = 2.0 + 8.0 * val
+#             folium.CircleMarker(
+#                 location=[y, x],
+#                 radius=radius,
+#                 color="black",
+#                 weight=1,
+#                 fill=True,
+#                 fill_opacity=0.6,
+#                 fill_color="black",
+#                 tooltip=f"Urchin count: {count:.0f}"
+#             ).add_to(fg_urchin)
+#         fg_urchin.add_to(m)
+
+#     # -------------------------
+#     # Multiclass predictions as POINTS
+#     # -------------------------
+#     class_points = defaultdict(list)
+#     for key, df in combined_dict.items():
+#         for _, row in df.iterrows():
+#             pred = row['predictions']
+#             # Normalize label variants
+#             if pred == "Reef-Urchin-Barren (Review)":
+#                 pred = "Reef-Urchin-Barren"
+#             if pred in ("Reef-Partial-Urchin-Barren (Review)",):
+#                 pred = "Reef-Partial-Urchin-Barren"
+#             if pred in ("Reef-Partial-Grazed (Review)", "Reef-Partial-Grazed"):
+#                 pred = "Reef-Partial-BrLfa"
+#             if pred == "Reef-Grazed":
+#                 pred = "Reef-BrLfa"
+#             if pred == "Reef-Vegetated":
+#                 pred = "Reef-FnEc"
+
+#             class_points[pred].append((row['Y'], row['X']))
+
+#     legend_entries = []
+#     for class_name in heatmap_colors.keys():
+#         legend_entries.append((class_name, heatmap_colors[class_name]))
+
+#     # Add a point layer per class
+#     for class_name, pts in class_points.items():
+#         if class_name not in heatmap_colors:
+#             # Skip unknown classes (or assign a default color if preferred)
+#             continue
+#         color = heatmap_colors[class_name]
+#         fg = FeatureGroup(name=class_name, show=True)
+#         for (y, x) in pts:
+#             folium.CircleMarker(
+#                 location=[y, x],
+#                 radius=3.5,
+#                 color=color,
+#                 weight=1,
+#                 fill=True,
+#                 fill_opacity=0.8,
+#                 fill_color=color,
+#                 tooltip=f"{class_name}"
+#             ).add_to(fg)
+#         fg.add_to(m)
+
+#     # Layer control
+#     folium.LayerControl(collapsed=False).add_to(m)
+
+#     # Legend
+#     legend_html = """
+#     {% macro html(this, kwargs) %}
+#     <div style="position: fixed; 
+#                 bottom: 50px; left: 50px; width: 260px; height: auto; 
+#                 background-color: white; z-index:9999; padding: 10px;
+#                 font-size:14px; border-radius:5px;
+#                 box-shadow: 2px 2px 5px rgba(0,0,0,0.3);">
+#         <b>Legend</b><br>
+#         <div><div style="width: 12px; height: 12px; background: black; display: inline-block;"></div> Urchin Count (point size)</div>
+#     """
+#     for class_name, color in legend_entries:
+#         legend_html += f"""
+#         <div><div style="width: 12px; height: 12px; background: {color}; display: inline-block;"></div> {class_name}</div>
+#         """
+#     legend_html += "</div>{% endmacro %}"
+#     legend = MacroElement()
+#     legend._template = Template(legend_html)
+#     m.get_root().add_child(legend)
+
+#     m.save(output_file)
+#     print(f"Heatmap saved to {output_file}")
+
+
+def get_density_heat_maps(combined_dict, output_path=".", output_file="heatmap_maps.html", png_file="heatmap_maps.png"):
+    import os
+    import numpy as np
+    import folium
+    from folium import FeatureGroup
+    from branca.element import MacroElement, Template
+    from collections import defaultdict
+
+    # -------------------------
+    # Validate / collect points
+    # -------------------------
+    output_html = os.path.join(output_path, output_file)
+    output_png  = os.path.join(output_path, png_file)
+
     all_points = []
     for df in combined_dict.values():
-        all_points.extend(df[['Y', 'X']].values.tolist())
-    map_center = [np.mean([p[0] for p in all_points]), np.mean([p[1] for p in all_points])]
-    m = folium.Map(location=map_center, zoom_start=7)
-    heatmap_colors = itertools.cycle(["red", "blue", "green", "purple", "orange", "pink", "brown"])
-    heatmap_colors = {"Reef-Urchin-Barren": "red",
-                      "Reef-Partial-Urchin-Barren": "orange",
-                      "Unconsolidated": "blue",
-                      "Reef-Vegetated": "#99ff99",
-                      "Reef-Kelp": "green",
-                      "Reef-Grazed": "purple",
-                      "Reef-Partial-Grazed":"pink",
-                      }
+        if 'Y' in df.columns and 'X' in df.columns:
+            all_points.extend(df[['Y', 'X']].values.tolist())
 
-    # Urchin count heatmap (aggregating values for overlapping points)
+    if len(all_points) == 0:
+        raise ValueError("No points found in combined_dict (expected columns 'Y' and 'X').")
+
+    # Center for Folium
+    map_center = [np.mean([p[0] for p in all_points]), np.mean([p[1] for p in all_points])]
+
+    # -------------------------
+    # Fixed color mapping per class
+    # -------------------------
+    heatmap_colors = {
+        "Reef-Urchin-Barren": "red",
+        "Reef-Partial-Urchin-Barren": "orange",
+        "Unconsolidated": "blue",
+        "Reef-FnEc": "#99ff99",
+        "Reef-Kelp": "green",
+        "Reef-BrLfa": "purple",
+        "Reef-Partial-BrLfa": "pink",
+    }
+
+    # -------------------------
+    # Build Folium map (HTML)
+    # -------------------------
+    m = folium.Map(location=map_center, zoom_start=7)
+
+    # 1) Urchin count as POINTS
     urchin_data = []
     for df in combined_dict.values():
-        for _, row in df.iterrows():
-            urchin_data.append([row['Y'], row['X'], row['urchin_count']])
+        if 'urchin_count' in df.columns:
+            for _, row in df.iterrows():
+                cnt = row['urchin_count']
+                # robust float conversion, skip NaNs
+                try:
+                    cnt = float(cnt)
+                except Exception:
+                    continue
+                if np.isfinite(cnt):
+                    urchin_data.append([row['Y'], row['X'], cnt])
+
     if urchin_data:
-        max_urchin = max([x[2] for x in urchin_data]) if urchin_data else 1
-        urchin_data = [[y, x, count / max_urchin] for y, x, count in urchin_data]
-        HeatMap(urchin_data, name="Urchin Count", gradient={0.2: "#ffffff", 0.8: "black"}).add_to(m)
+        max_urchin = max(x[2] for x in urchin_data) or 1.0
+        fg_urchin = FeatureGroup(name="Urchin Count (points)", show=True)
+        for y, x, count in urchin_data:
+            val = count / max_urchin
+            radius = 2.0 + 8.0 * val  # 2..10 px
+            folium.CircleMarker(
+                location=[y, x],
+                radius=radius,
+                color="black",
+                weight=1,
+                fill=True,
+                fill_opacity=0.6,
+                fill_color="black",
+                tooltip=f"Urchin count: {count:.0f}",
+            ).add_to(fg_urchin)
+        fg_urchin.add_to(m)
 
-    # Multiclass prediction heatmaps
-    class_heatmaps = defaultdict(list)
+    # 2) Multiclass predictions as POINTS
+    def _normalize_label(lbl: str) -> str:
+        if lbl == "Reef-Urchin-Barren (Review)":
+            return "Reef-Urchin-Barren"
+        if lbl in ("Reef-Partial-Urchin-Barren (Review)",):
+            return "Reef-Partial-Urchin-Barren"
+        if lbl in ("Reef-Partial-Grazed (Review)", "Reef-Partial-Grazed"):
+            return "Reef-Partial-BrLfa"
+        if lbl == "Reef-Grazed":
+            return "Reef-BrLfa"
+        if lbl == "Reef-Vegetated":
+            return "Reef-FnEc"
+        return lbl
+
+    class_points = defaultdict(list)
     for key, df in combined_dict.items():
+        if 'predictions' not in df.columns:
+            continue
         for _, row in df.iterrows():
-            prediction = row['predictions'] 
-            if prediction == "Reef-Urchin-Barren (Review)":
-                prediction="Reef-Urchin-Barren"
-            if prediction == "Reef-Partial-Urchin-Barren (Review)":
-                prediction = "Reef-Partial-Urchin-Barren"
-            if prediction == "Reef-Partial-Grazed (Review)":
-                prediction = "Reef-Partial-Grazed"
-            class_heatmaps[prediction].append([row['Y'], row['X'], 1])  # Binary heatmap (presence)
+            pred = _normalize_label(row['predictions'])
+            if pred in heatmap_colors:
+                class_points[pred].append((row['Y'], row['X']))
 
-
-    # Add heatmaps for each prediction class
-    legend_entries = []
-    for class_name in heatmap_colors.keys():
-        legend_entries.append((class_name, heatmap_colors[class_name]))
-    for class_name, data in class_heatmaps.items():
+    # Add one point layer per class
+    for class_name, pts in class_points.items():
         color = heatmap_colors[class_name]
-        HeatMap(data, name=class_name, gradient={0.1: "#ffffff", 0.7: color},blur=25, radius=20).add_to(m)
-            
+        fg = FeatureGroup(name=class_name, show=True)
+        for (y, x) in pts:
+            folium.CircleMarker(
+                location=[y, x],
+                radius=3.5,
+                color=color,
+                weight=1,
+                fill=True,
+                fill_opacity=0.8,
+                fill_color=color,
+                tooltip=f"{class_name}",
+            ).add_to(fg)
+        fg.add_to(m)
+
+    # Layer control
     folium.LayerControl(collapsed=False).add_to(m)
+
+    # Legend (HTML)
+    legend_entries = list(heatmap_colors.items())
     legend_html = """
     {% macro html(this, kwargs) %}
     <div style="position: fixed; 
-                bottom: 50px; left: 50px; width: 250px; height: auto; 
+                bottom: 50px; left: 50px; width: 280px; height: auto; 
                 background-color: white; z-index:9999; padding: 10px;
                 font-size:14px; border-radius:5px;
                 box-shadow: 2px 2px 5px rgba(0,0,0,0.3);">
         <b>Legend</b><br>
-        <div><div style="width: 12px; height: 12px; background: black; display: inline-block;"></div> Urchin Count</div>
+        <div><div style="width: 12px; height: 12px; background: black; display: inline-block; margin-right:6px;"></div> Urchin Count (point size)</div>
     """
     for class_name, color in legend_entries:
         legend_html += f"""
-        <div><div style="width: 12px; height: 12px; background: {color}; display: inline-block;"></div> {class_name}</div>
+        <div><div style="width: 12px; height: 12px; background: {color}; display: inline-block; margin-right:6px;"></div> {class_name}</div>
         """
     legend_html += "</div>{% endmacro %}"
     legend = MacroElement()
     legend._template = Template(legend_html)
     m.get_root().add_child(legend)
-    m.save(output_file)
-    print(f"Heatmap saved to {output_file}")
+
+    # Save HTML
+    os.makedirs(output_path, exist_ok=True)
+    m.save(output_html)
+    print(f"[Folium] Map saved to {output_html}")
+
+    # -------------------------
+    # Static PNG with Matplotlib
+    # -------------------------
+    # Collect arrays for plotting
+    import matplotlib.pyplot as plt
+    from matplotlib.lines import Line2D
+    from matplotlib.patches import Patch
+
+    # tight bounds with small padding
+    lats = np.array([p[0] for p in all_points], dtype=float)
+    lons = np.array([p[1] for p in all_points], dtype=float)
+    if lats.size == 0 or lons.size == 0:
+        raise ValueError("No valid lat/lon points to plot.")
+
+    # pad roughly to zoom in; adjust as needed
+    pad_lat = max(1e-4, 0.02 * max(1e-6, lats.max() - lats.min()))
+    pad_lon = max(1e-4, 0.02 * max(1e-6, lons.max() - lons.min()))
+    lat_min, lat_max = lats.min() - pad_lat, lats.max() + pad_lat
+    lon_min, lon_max = lons.min() - pad_lon, lons.max() + pad_lon
+
+    # Prepare per-class arrays
+    class_arrays = {}
+    for cname, pts in class_points.items():
+        if len(pts) == 0:
+            continue
+        arr = np.array(pts, dtype=float)  # (N, 2) -> [lat, lon]
+        class_arrays[cname] = (arr[:, 0], arr[:, 1])  # (lats, lons)
+
+    # Prepare urchin arrays and scale
+    ur_lats, ur_lons, ur_sizes = [], [], []
+    urchin_count = len(urchin_data)
+    # urchin_data = []
+    i =0 
+    if urchin_data:
+        for y, x, c in urchin_data:
+            if i%2==0:
+                ur_lats.append(float(y))
+                ur_lons.append(float(x))
+                ur_sizes.append(float(c))
+            i+=1
+        ur_lats = np.array(ur_lats, dtype=float)
+        ur_lons = np.array(ur_lons, dtype=float)
+        ur_sizes = np.array(ur_sizes, dtype=float)
+        # Normalize sizes to a reasonable pixel range (20..120 pts^2 for scatter)
+        if np.any(np.isfinite(ur_sizes)):
+            smin, smax = np.nanmin(ur_sizes), np.nanmax(ur_sizes)
+            if smax <= smin:
+                smax = smin + 1.0
+            ur_sizes = 300+ 100.0 * (ur_sizes - smin) / (smax - smin)
+        else:
+            ur_sizes = np.full_like(ur_lats, 40.0)
+
+    # Aspect ratio handling for figure dims (wider if longitude span is larger)
+    span_lat = (lat_max - lat_min)
+    span_lon = (lon_max - lon_min)
+    aspect = span_lon / max(1e-12, span_lat)
+    width = 7.0 * min(2.0, max(0.7, aspect))  # clamp to avoid extreme shapes
+    height = 7.0
+
+    fig = plt.figure(figsize=(width, height), dpi=400)
+    ax = plt.gca()
+
+    # Plot urchins on top (black, size by count)
+    if urchin_data:
+        ax.scatter(ur_lons, ur_lats, s=ur_sizes, facecolors='black', edgecolors='black', alpha=0.5)
+
+    # Plot classes
+    for cname, (clats, clons) in class_arrays.items():
+        color = heatmap_colors[cname]
+        ax.scatter(clons, clats, s=50, c=color, edgecolors='none', alpha=0.9, label=cname)
+
+    fsize = 18
+
+    ax.set_xlim(lon_min, lon_max)
+    ax.set_ylim(lat_min, lat_max)
+    ax.tick_params(axis='x', labelsize=fsize-4)       # for x tick labels
+    ax.tick_params(axis='y', labelsize=fsize-4)       # for y tick labels
+    ax.set_aspect('equal', adjustable='box')
+    ax.set_xlabel("Longitude",fontsize=fsize-3)
+    ax.set_ylabel("Latitude",fontsize=fsize-3)
+    ax.set_title(f"Predicted habitat classes by the rule-based classifier",fontsize=fsize+1)
+    # Build legend: class color boxes + urchin marker
+    class_handles = [Patch(facecolor=heatmap_colors[c], edgecolor='none', label=c) for c in heatmap_colors.keys() if c in class_arrays]
+    urchin_handle = Line2D([0], [0], marker='o', color='black', markerfacecolor='black',
+                           markersize=6, linewidth=0, alpha=0.6, label='Urchin Count (size)')
+    handles = class_handles + ([urchin_handle] if urchin_data else [])
+
+    if handles:
+        ax.legend(handles=handles, loc='best', frameon=True, fontsize=fsize-3)
+
+    ax.grid(True, alpha=0.25)
+    fig.tight_layout()
+    fig.savefig(output_png)
+    plt.close(fig)
+    print(f"[Matplotlib] Static map saved to {output_png}")
+  
 
 def make_fig_example_for_paper(HClassifier,image_path,output_name):
     import matplotlib
@@ -437,18 +840,18 @@ def make_fig_example_for_paper(HClassifier,image_path,output_name):
     frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
     frame = cv2.resize(frame, (3648, 2736))
     i_to_c_frame = {0: "Reef-Urchin-Barren", 1: "Reef-Grazed",2: "Reef-Kelp", 3: "Reef-Vegetated",4: "Unconsolidated"}
-    patch_conf_threshold = 0.75
+    i_to_c_frame = {0: "Reef-Urchin-Barren", 1: "Reef-BrLfa",2: "Reef-Kelp", 3: "Reef-FnEc",4: "Unconsolidated"}
+    patch_conf_threshold = 0.7
     img,patches_boxes,patches_centers,patches_pred_ratios_dict,patches_preds_categorial,patches_probs,frame_probs,urchin_boxes = HClassifier.get_all_models_predictions(frame)
 
     patch_classes = [f'Carpophyllum ({np.round(patches_pred_ratios_dict["Carpophyllum"],1)}%)',
                      f'Ecklonia ({np.round(patches_pred_ratios_dict["Ecklonia"],1)}%)',
-                     f'Foliose Algae ({np.round(patches_pred_ratios_dict["Foliose Algae"],1)}%)',
+                     f'Foliose algae ({np.round(patches_pred_ratios_dict["Foliose algae"],1)}%)',
                      f'Other canopy ({np.round(patches_pred_ratios_dict["Other canopy"],1)}%)',
                      f'Unconsolidated ({np.round(patches_pred_ratios_dict["Unconsolidated"],1)}%)',
                      f'Urchin',
-                     f'Grazed rock ({np.round(patches_pred_ratios_dict["Grazed rock"],1)}%)',
+                     f'BrLfa ({np.round(patches_pred_ratios_dict["BrLfa"],1)}%)',
                      ]
-
     initial_frame_level_prediction = i_to_c_frame[np.argmax(frame_probs)]
     cmap = matplotlib.colormaps.get_cmap('tab10')
     # cmap = get_cmap('tab10') 
@@ -480,51 +883,53 @@ def make_fig_example_for_paper(HClassifier,image_path,output_name):
   
     recommendation = "None"
     # Initial label conversion
-    if initial_frame_level_prediction == "Reef-Grazed":
+    if initial_frame_level_prediction == "Reef-BrLfa":
         if len(urchin_boxes)>0:
             initial_frame_level_prediction = "Reef-Urchin-Barren"
             rule_numbers.append("#1")
     elif initial_frame_level_prediction == "Reef-Urchin-Barren":
         if len(urchin_boxes)==0:
-            initial_frame_level_prediction = "Reef-Grazed"
+            initial_frame_level_prediction = "Reef-BrLfa"
             rule_numbers.append("#2")
 
     # rules-based label conversion
     if np.max(frame_probs)<=0.6:
         if len(urchin_boxes)==0:
-            recommendation = "Reef-Partial-Grazed"
+            recommendation = "Reef-Partial-BrLfa"
             rule_numbers.append("#3")
         else:
-            if patches_pred_ratios_dict['Grazed rock']>70:
-                recommendation = "Reef-Urchin-Barren"
-                rule_numbers.append("#4")
-            else:
-                recommendation = "Reef-Partial-Urchin-Barren"
-                rule_numbers.append("#5")
-    elif initial_frame_level_prediction == "Reef-Kelp":
-        if (patches_pred_ratios_dict['Grazed rock']>25 and len(urchin_boxes)>0) or len(urchin_boxes)>0: 
             recommendation = "Reef-Partial-Urchin-Barren"
+            rule_numbers.append("#4")
+    elif initial_frame_level_prediction == "Reef-Kelp":
+        if len(urchin_boxes)>0: 
+            recommendation = "Reef-Partial-Urchin-Barren"
+            rule_numbers.append("#5")
+        elif (patches_pred_ratios_dict['BrLfa']>25 and len(urchin_boxes)==0):
+            recommendation = "Reef-Partial-BrLfa"
             rule_numbers.append("#6")
-    elif initial_frame_level_prediction == "Reef-Vegetated":
-        if (patches_pred_ratios_dict['Grazed rock']>25 and len(urchin_boxes)>0) or len(urchin_boxes)>0:  
+    elif initial_frame_level_prediction == "Reef-FnEc":
+        if len(urchin_boxes)>0:  
             recommendation = "Reef-Partial-Urchin-Barren"
             rule_numbers.append("#7")
+        elif (patches_pred_ratios_dict['BrLfa']>25 and len(urchin_boxes)==0):
+                recommendation = "Reef-Partial-BrLfa"
+                rule_numbers.append("#8")
     elif initial_frame_level_prediction == "Reef-Urchin-Barren":
-        if patches_pred_ratios_dict['Carpophyllum']+patches_pred_ratios_dict['Ecklonia']+patches_pred_ratios_dict['Other canopy']+patches_pred_ratios_dict['Foliose Algae']>25:
+        if patches_pred_ratios_dict['Carpophyllum']+patches_pred_ratios_dict['Ecklonia']+patches_pred_ratios_dict['Other canopy']+patches_pred_ratios_dict['Foliose algae']>25:
             recommendation = "Reef-Partial-Urchin-Barren"
-            rule_numbers.append("#8")
-    elif initial_frame_level_prediction == "Reef-Grazed":
-        if patches_pred_ratios_dict['Carpophyllum']+patches_pred_ratios_dict['Ecklonia']+patches_pred_ratios_dict['Other canopy']+patches_pred_ratios_dict['Foliose Algae']>25:
-            recommendation = "Reef-Partial-Grazed"
             rule_numbers.append("#9")
+    elif initial_frame_level_prediction == "Reef-BrLfa":
+        if patches_pred_ratios_dict['Carpophyllum']+patches_pred_ratios_dict['Ecklonia']+patches_pred_ratios_dict['Other canopy']+patches_pred_ratios_dict['Foliose algae']>25:
+            recommendation = "Reef-Partial-BrLfa"
+            rule_numbers.append("#10")
     elif  initial_frame_level_prediction == "Unconsolidated":
         if len(urchin_boxes)>0:
-            recommendation = "Reef-Urchin-Barren"
-            rule_numbers.append("#10")
+            recommendation = "Reef-Partial-Urchin-Barren"
+            rule_numbers.append("#11")
 
     if recommendation=="None":
         recommendation = initial_frame_level_prediction
-        rule_numbers.append("#11")
+        rule_numbers.append("#12")
 
     fig, ax = plt.subplots(figsize=(15, 13)) 
     fig.patch.set_facecolor("black")  # Set figure background color
@@ -547,30 +952,32 @@ def make_fig_example_for_paper(HClassifier,image_path,output_name):
     legend.get_frame().set_edgecolor("white")  # Optional: White border for better visibility
     for text in legend.get_texts():
         text.set_color("white")  # Set legend text color to white for contrast
+        text.set_fontstyle('italic')
 
     a = -0.20
     plt.text(
         0.5, a,  
         f"urchin-count by Urchinbot: {len(urchin_boxes)}",
-        color="white", fontsize=22, ha="center", transform=ax.transAxes
+        color="white", fontsize=22, ha="center", transform=ax.transAxes, fontstyle="italic"
     )
     plt.text(
         0.5, a-0.05,  
         f"initial-frame-prediction: {initial_frame_level_prediction} / conf-frame: {np.max(frame_probs):.2f}",
-        color="white", fontsize=22, ha="center", transform=ax.transAxes
+        color="white", fontsize=22, ha="center", transform=ax.transAxes, fontstyle="italic"
     )
     plt.text(
         0.5, a-0.1,  
-        f"recommendation: {recommendation}",
-        color="red", fontsize=22, ha="center", transform=ax.transAxes
+        f"Recommendation: {recommendation}",
+        color="white", fontsize=23, ha="center", transform=ax.transAxes, fontstyle="italic"
     )
     plt.text(
         0.5, a-0.15, 
         f"used rules: {rule_numbers}",
-        color="white", fontsize=22, ha="center", transform=ax.transAxes
+        color="white", fontsize=22, ha="center", transform=ax.transAxes, fontstyle="italic"
     )
     plt.tight_layout()  
     plt.savefig(output_name+".png", bbox_inches='tight')
+    plt.close()
     return recommendation
 
 
@@ -578,26 +985,12 @@ def make_fig_example_for_paper(HClassifier,image_path,output_name):
 if __name__ == '__main__':
     # input_path = os.path.join("dataset", "density-samples","inputs")
     # output_path = os.path.join("dataset", "density-samples","outputs")
-    # frame_classifier_path =  os.path.join("trained_classifiers", "frame_classifier")
-    # patch_classifier_path = os.path.join("trained_classifiers","patch_classifier")
-    # data_dict = get_density_dicts(input_path,output_path,frame_classifier_path,patch_classifier_path)
-    # get_density_heat_maps(data_dict, output_path=output_path)
-    
-
-
-
     # frame_classifier_path =  os.path.join("trained_classifiers_", "frame_classifier")
     # patch_classifier_path = os.path.join("trained_classifiers_","patch_classifier")
-    # HClassifier = HabitatClassifier(frame_classifier_path =frame_classifier_path,
-    #                                 patch_classifier_path = patch_classifier_path,
-    #                                 crop_ratio= 0.2)
-    # image_path = os.path.join("dataset","frame7_dataset_cleaned","train", "reef_barren", "5423297_NSW49WCB5MAragunnuSouthernBay071114 (17).JPG")    
-    # image_path = os.path.join("dataset","frame7_dataset_cleaned","train", "reef_grazed", "frames_17_01_20257965250_SYD38_JT7m300422MiddleHeadSth  (20).JPG")
-    # image_path = os.path.join("dataset","frame7_dataset_cleaned","train", "reef_partial_barren", "frames_17_01_20258650396_GOPR5584.jpg")
-    # image_path = os.path.join("dataset","frame7_dataset_cleaned","train", "reef_partial_grazed", "frames_17_01_20258638975_GOPR0243.jpg")
-    # make_fig_example_for_paper(HClassifier,image_path,output_name = "1")
-
-
+    # data_dict = get_density_dicts(input_path,output_path,frame_classifier_path,patch_classifier_path)
+ 
+    # get_density_heat_maps(data_dict, output_path=output_path)
+    
 
 
 
@@ -606,18 +999,40 @@ if __name__ == '__main__':
     HClassifier = HabitatClassifier(frame_classifier_path =frame_classifier_path,
                                     patch_classifier_path = patch_classifier_path,
                                     crop_ratio= 0.2)
-    final_dataset_path = os.path.join("dataset", "final_dataset")
-    image_paths = glob.glob(os.path.join(final_dataset_path, "*"))
-    output_path = "predictions-final-dataset"
-    if not os.path.exists(output_path):
-        os.makedirs(output_path)
-    recommendation_dict = {}
-    for image_path in tqdm(image_paths):
-        image_name = os.path.basename(image_path)
-        recommendation = make_fig_example_for_paper(HClassifier,image_path,output_name = os.path.join(output_path, image_name))
-        recommendation_dict.update({image_name:recommendation})
-    df = pd.DataFrame(list(recommendation_dict.items()), columns=["Image Name", "AI Prediction"])
-    df.to_csv(os.path.join(output_path,"recommendations.csv"), index=False)
+    image_path_1 = os.path.join("dataset","frame7_dataset_cleaned","train", "reef_barren", "5423297_NSW49WCB5MAragunnuSouthernBay071114 (17).JPG")    
+    image_path_2 = os.path.join("dataset","frame7_dataset_cleaned","train", "reef_grazed", "frames_17_01_20257965250_SYD38_JT7m300422MiddleHeadSth  (20).JPG")
+    image_path_3 = os.path.join("dataset","frame7_dataset_cleaned","train", "reef_partial_barren", "frames_17_01_20258650396_GOPR5584.jpg")
+    image_path_4 = os.path.join("dataset","frame7_dataset_cleaned","train", "reef_partial_grazed", "frames_17_01_20258638975_GOPR0243.jpg")
+    image_path_5 = os.path.join("GOPR9437.JPG")
+
+
+    # make_fig_example_for_paper(HClassifier,image_path_1,output_name = "1")
+    make_fig_example_for_paper(HClassifier,image_path_2,output_name = "2")
+    make_fig_example_for_paper(HClassifier,image_path_3,output_name = "3")
+    make_fig_example_for_paper(HClassifier,image_path_4,output_name = "4")
+    make_fig_example_for_paper(HClassifier,image_path_5,output_name = "5")
+
+
+
+
+
+    # frame_classifier_path =  os.path.join("trained_classifiers_", "frame_classifier")
+    # patch_classifier_path = os.path.join("trained_classifiers_","patch_classifier")
+    # HClassifier = HabitatClassifier(frame_classifier_path =frame_classifier_path,
+    #                                 patch_classifier_path = patch_classifier_path,
+    #                                 crop_ratio= 0.2)
+    # final_dataset_path = os.path.join("dataset", "final_dataset")
+    # image_paths = glob.glob(os.path.join(final_dataset_path, "*"))
+    # output_path = "predictions-final-dataset"
+    # if not os.path.exists(output_path):
+    #     os.makedirs(output_path)
+    # recommendation_dict = {}
+    # for image_path in tqdm(image_paths):
+    #     image_name = os.path.basename(image_path)
+    #     recommendation = make_fig_example_for_paper(HClassifier,image_path,output_name = os.path.join(output_path, image_name))
+    #     recommendation_dict.update({image_name:recommendation})
+    # df = pd.DataFrame(list(recommendation_dict.items()), columns=["Image Name", "AI Prediction"])
+    # df.to_csv(os.path.join(output_path,"recommendations.csv"), index=False)
 
 
 

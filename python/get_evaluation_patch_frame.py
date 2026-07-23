@@ -23,7 +23,6 @@ import tensorflow_addons as tfa
 from tqdm import tqdm 
 from multiclassifier import *
 
-
 from tensorflow.keras.applications.inception_v3 import preprocess_input as preprocess_input_inception
 from tensorflow.keras.applications.resnet50 import preprocess_input as preprocess_input_resnet
 from tensorflow.keras.applications.efficientnet import preprocess_input as preprocess_input_efficient
@@ -45,20 +44,133 @@ from tensorflow.keras.applications import InceptionResNetV2
 
 
 
+
+def _vis_uint8(x):
+    return np.clip(x, 0, 255).astype(np.uint8)
+
+def build_gradcam_model_from_gap(model, gap_layer_name="global_average_pooling2d"):
+    """
+    Build a grad-model on the *outer* graph:
+      inputs -> [feature_map_before_GAP, logits]
+    The feature map is taken as the INPUT to the GAP layer, which is a 4D tensor
+    (None, H, W, C) and is guaranteed to be in the same graph as model.inputs.
+    """
+    gap = model.get_layer(gap_layer_name)
+    feat_t = gap.input                        # <- 4D tensor in the top graph
+    grad_model = tf.keras.Model(
+        inputs=model.inputs,
+        outputs=[feat_t, model.outputs]       # [feature_map, logits]
+    )
+    return grad_model, feat_t.shape
+
+def gradcam_single_image(
+    grad_model, full_model, img_preprocessed, target_class=None, alpha=0.45, save_path=None
+):
+    """
+    Run Grad-CAM on ONE preprocessed image (H,W,3) float32.
+    target_class: int (None => use predicted class)
+    """
+    if img_preprocessed.ndim != 3:
+        raise ValueError(f"Expected (H,W,3), got {img_preprocessed.shape}")
+    x = tf.convert_to_tensor(img_preprocessed[None, ...], dtype=tf.float32)
+
+    # forward once to get prediction
+    logits = full_model(x, training=False)
+    pred_idx = int(tf.argmax(logits[0]).numpy())
+    class_idx = pred_idx if target_class is None else int(target_class)
+
+    # gradients wrt feature map BEFORE GAP
+    with tf.GradientTape() as tape:
+        feat_map, logits2 = grad_model(x, training=False)
+        if isinstance(logits2, (list, tuple)):   # unwrap if it’s [logits]
+            logits2 = logits2[0]
+        score = logits2[:, class_idx]
+
+
+
+    grads = tape.gradient(score, feat_map)                  # (1,h,w,c)
+    if grads is None:
+        raise RuntimeError("Gradients are None — check grad_model wiring.")
+
+    # Grad-CAM weights: channel-wise global average of grads
+    weights = tf.reduce_mean(grads, axis=(1, 2))            # (1,c)
+    fmap = feat_map[0]                                      # (h,w,c)
+    w    = weights[0]                                       # (c,)
+
+    cam = tf.reduce_sum(fmap * w, axis=-1)                  # (h,w)
+    cam = tf.maximum(cam, 0)
+    cam = cam / (tf.reduce_max(cam) + 1e-8)
+    cam = cam.numpy()
+
+    # overlay
+    disp = _vis_uint8(img_preprocessed)                     # assumes your pipeline is [0,255]; undo if needed
+    H, W = disp.shape[:2]
+    cam_rs = cv2.resize(cam, (W, H), interpolation=cv2.INTER_LINEAR)
+    heat = cv2.applyColorMap((cam_rs * 255).astype(np.uint8), cv2.COLORMAP_JET)
+    heat = cv2.cvtColor(heat, cv2.COLOR_BGR2RGB)
+    overlay = (alpha * heat + (1 - alpha) * disp).astype(np.uint8)
+    overlay = np.hstack((disp,overlay))
+
+    if save_path:
+        os.makedirs(os.path.dirname(save_path), exist_ok=True)
+        cv2.imwrite(save_path, cv2.cvtColor(overlay, cv2.COLOR_RGB2BGR))
+
+    return {"pred_idx": pred_idx, "target_idx": class_idx, "overlay": overlay, "heatmap": cam_rs}
+
+def save_gradcams_over_dataset_one_by_one(
+    model, dataset, idx2name, out_dir,
+    gap_layer_name="global_average_pooling2d", target_mode="pred", limit=None, alpha=0.45, device="/GPU:0"
+):
+    """
+    Iterate ONE IMAGE AT A TIME; save each overlay immediately.
+    dataset must yield (images, onehot_labels).
+    """
+    os.makedirs(out_dir, exist_ok=True)
+    with tf.device(device):
+        grad_model, _ = build_gradcam_model_from_gap(model, gap_layer_name)
+
+    n = 0
+    for imgs, labels in dataset:
+        imgs = imgs.numpy()
+        labels = labels.numpy()
+        for i in range(imgs.shape[0]):
+            if limit is not None and n >= limit:
+                return
+            x = imgs[i].astype(np.float32)
+            true_idx = int(np.argmax(labels[i]))
+            tgt = true_idx if target_mode == "true" else None
+            outt = os.path.join(out_dir,idx2name[true_idx])
+            os.makedirs(outt,exist_ok=True)
+            res = gradcam_single_image(
+                grad_model, model, x, target_class=tgt, alpha=alpha,
+                save_path=os.path.join(outt, f"{n:06d}.png")
+            )
+            pred_name = idx2name[res["pred_idx"]]
+            true_name = idx2name[true_idx]
+            tgt_name  = idx2name[res["target_idx"]]
+
+
+            
+            final = os.path.join(outt, f"{n:06d}__pred-{pred_name}.png")
+            os.replace(os.path.join(outt, f"{n:06d}.png"), final)
+            n += 1
+
 SEED = 2
 random.seed(SEED)
 np.random.seed(SEED)
 tf.random.set_seed(SEED)
-
-ACTUAL_CLASS_NAMES_frame = {"reef_barren": "Reef-Barren",
-                      "reef_grazed": "Reef-Grazed",
+ACTUAL_CLASS_NAMES_frame = {"reef_barren": "Reef-Urchin-Barren",
+                      "reef_grazed": "Reef-BrLfa",
                       "reef_kelp": "Reef-Kelp", 
                       "reef_partial_barren": "Reef-Partial-Barren",
-                      "reef_partial_grazed":"Reef-Partial-Grazed",
-                      "reef_vegetated": "Reef-Vegetated",
+                      "reef_partial_grazed":"Reef-Partial-BrLfa",
+                      "reef_vegetated": "Reef-FnEc",
                       "unconsolidated": "Unconsolidated",
                       "reef_partial": "Reef-Partial"
                     }
+
+LABEL_ORDER = ["Reef-Urchin-Barren","Reef-BrLfa","Reef-Kelp","Reef-FnEc","Unconsolidated"]
+
 def get_image_paths_and_labels(dataset_path):
     train_dataset_path = os.path.join(dataset_path,"train")
     val_dataset_path = os.path.join(dataset_path,"val")
@@ -160,7 +272,7 @@ def make_datasets(model_name,train_images, train_labels, valid_images, valid_lab
             raise Exception ("Model Name Not Found")
         return image, label
 
-    def create_dataset(filenames, labels, model_name=model_name,  batch_size=batch_size, is_training=True):
+    def create_dataset(filenames, labels, model_name=model_name,  batch_size=batch_size, is_training=False):
         AUTOTUNE = tf.data.experimental.AUTOTUNE
         SHUFFLE_BUFFER_SIZE = 1024
         dataset = tf.data.Dataset.from_tensor_slices((filenames, labels))
@@ -175,7 +287,8 @@ def make_datasets(model_name,train_images, train_labels, valid_images, valid_lab
         dataset = dataset.prefetch(buffer_size=AUTOTUNE)
         return dataset
 
-    label_map = {label: idx for idx, label in enumerate(sorted(set(train_labels + valid_labels + test_labels)))}
+    label_map = {label: idx for idx, label in enumerate(set(train_labels + valid_labels + test_labels))}
+    label_map = {label:LABEL_ORDER.index(label) for label in label_map}
     
     combined = list(zip(train_images, train_labels))
     random.Random(SEED).shuffle(combined)  
@@ -193,7 +306,7 @@ def make_datasets(model_name,train_images, train_labels, valid_images, valid_lab
     train_labels_encoded = to_categorical(train_labels_int, num_classes)
     valid_labels_encoded = to_categorical(valid_labels_int, num_classes)
     test_labels_encoded = to_categorical(test_labels_int, num_classes)
-    train_dataset =create_dataset(train_images, train_labels_encoded, model_name,  batch_size, is_training=True)
+    train_dataset =create_dataset(train_images, train_labels_encoded, model_name,  batch_size, is_training=False)
     valid_dataset =create_dataset(valid_images, valid_labels_encoded, model_name,  batch_size, is_training=False)
     test_dataset =create_dataset(test_images, test_labels_encoded, model_name,  batch_size, is_training=False)
     return train_dataset,valid_dataset, test_dataset, label_map
@@ -245,13 +358,14 @@ def get_confusion_matrix_plot (label_pred_list, label_truth_list, path, model_na
 
 def get_frame_model_evaluations(dataset_name,model_name,model_path):
     image_size = 512
-    batch_size = 32
+    batch_size = 16
     dataset_path = os.path.join("dataset",dataset_name)
     train_images, train_labels, valid_images, valid_labels, test_images, test_labels = get_image_paths_and_labels(dataset_path)
     train_dataset,valid_dataset, test_dataset, label_map= make_datasets(model_name,train_images, train_labels, valid_images, valid_labels, test_images, test_labels,batch_size=batch_size,image_size=image_size)
     print("Label Map for the Frame Classifier - class to index: ",label_map)
     number_of_classes = len(label_map)
     i_to_c = {v: k for k, v in label_map.items()}
+
     model = tf.keras.models.load_model(model_path)
     model.trainable = False
     pred_labels = []
@@ -260,9 +374,10 @@ def get_frame_model_evaluations(dataset_name,model_name,model_path):
         preds = model.predict(x, verbose = "0")
         preds = [i_to_c[i] for i in np.argmax(preds, axis=1)]
         truths =[i_to_c[i] for i in np.argmax(y, axis=1)]
+ 
         pred_labels.extend(preds)
         truth_labels.extend(truths)
-    report = get_classification_report_plot(pred_labels,truth_labels,os.path.dirname(model_path),"classifier_"+model_name)
+    report = get_classification_report_plot(pred_labels,truth_labels,os.path.dirname(model_path),"frame_classifier_"+model_name)
     get_confusion_matrix_plot (pred_labels, truth_labels, os.path.dirname(model_path), model_name = "frame_classifier_"+model_name)
     print("*********************** Frame Classifier ***********************")
     print(report["accuracy"])
@@ -318,7 +433,7 @@ def get_patch_model_evaluations(patch_dataset_name,patch_model_name,patch_model_
                                     to_be_combined=["Bare rock", "Turf", "Encrusting algae","Filamentous algae", "grazed rock"],
                                     outlier_classes=[],
                                     sample_ratios={},
-                                    batch_size=256,
+                                    batch_size=16,
                                     model_name=patch_model_name,
                                     epochs=100,
                                     initial_learning_rate=0.001,
@@ -335,9 +450,27 @@ def get_patch_model_evaluations(patch_dataset_name,patch_model_name,patch_model_
                                     verbose=False)  
     
     model=tf.keras.models.load_model(patch_model_path,compile=False, custom_objects={"LayerScale": LayerScale})
+
+
     model.trainable = False
     test_dataset = MyClassifier.test_ds
     i_to_c = {v: k for k, v in MyClassifier.train_class_names.items()}
+    i_to_c[6] = "BrLfa"
+   
+    # out_dir = os.path.join(os.path.dirname(patch_model_path), "gradcams_test")
+
+    # save_gradcams_over_dataset_one_by_one(
+    #     model=model,
+    #     dataset=MyClassifier.test_ds,   # (image, onehot)
+    #     idx2name=i_to_c,
+    #     out_dir=out_dir,
+    #     gap_layer_name="global_average_pooling2d",  # from your summary
+    #     target_mode="pred",                         # or "true"
+    #     limit=None,                                 # set small int while debugging
+    #     alpha=0.45,
+    #     device="/GPU:0"                             # switch to "/CPU:0" if CUDA misbehaves
+    # )
+    
     y_pred = model.predict(test_dataset)
     y_hat = np.zeros_like(y_pred)
     y_hat[np.arange(len(y_pred)), np.argmax(y_pred, axis=1)] = 1
@@ -348,19 +481,21 @@ def get_patch_model_evaluations(patch_dataset_name,patch_model_name,patch_model_
         pred_labels.append(i_to_c[int(np.argmax(y_hat[i]))])
         truth_labels.append(i_to_c[int(np.argmax(y_true[i]))])
     report = get_classification_report_plot(pred_labels,truth_labels,os.path.dirname(patch_model_path),"patch_classifier_"+patch_model_name)
-    get_confusion_matrix_plot (pred_labels, truth_labels, os.path.dirname(patch_model_path), model_name = "frame_classifier_"+patch_model_name)
+    get_confusion_matrix_plot (pred_labels, truth_labels, os.path.dirname(patch_model_path), model_name = "patch_classifier_"+patch_model_name)
     print("*********************** Patch Classifier ***********************")
     print(report["accuracy"])
     print(report["macro avg"])
     print("****************************************************************")
     
 
-
 if __name__ == '__main__':
-    frame_dataset_name= "frame7_dataset_cleaned"
-    frame_model_name = "inception"
-    frame_model_path = os.path.join("trained_classifiers","frame_classifier", "frame_classifer.h5")
+
+
+    # frame_dataset_name= "frame7_dataset_cleaned"
+    # frame_model_name = "inception"
+    # frame_model_path = os.path.join("trained_classifiers","frame_classifier", "frame_classifer.h5")
     # get_frame_model_evaluations(frame_dataset_name,frame_model_name,frame_model_path)
+    
     patch_dataset_name = "patches"
     patch_model_name = "convnextB"
     patch_model_path = os.path.join("trained_classifiers","patch_classifier", "patch_classifier.h5")

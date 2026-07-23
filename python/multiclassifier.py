@@ -363,10 +363,10 @@ def create_dataset(filenames, labels,   batch_size, model_name, patch_size_ratio
     
     if is_training == True:
         # dataset = dataset.cache()
-        dataset = dataset.map(lambda filename, label: parse_function(filename, label, model_name,patch_size_ratio), num_parallel_calls=AUTOTUNE)
+        dataset = dataset.map(lambda filename, label: parse_function_aug(filename, label, model_name,patch_size_ratio), num_parallel_calls=AUTOTUNE)
         dataset = dataset.shuffle(buffer_size=SHUFFLE_BUFFER_SIZE)
     else:
-        dataset = dataset.map(lambda filename, label: parse_function_aug(filename, label, model_name,patch_size_ratio), num_parallel_calls=AUTOTUNE)
+        dataset = dataset.map(lambda filename, label: parse_function(filename, label, model_name,patch_size_ratio), num_parallel_calls=AUTOTUNE)
     dataset = dataset.batch(batch_size)
     dataset = dataset.prefetch(buffer_size=AUTOTUNE)
     return dataset

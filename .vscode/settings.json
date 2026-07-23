@@ -1,0 +1,6 @@
+{
+  "markdown.preview.securityLevel": "disabled",
+  "workbench.editorAssociations": {
+    "*.md": "vscode.markdown.preview.editor"
+  }
+}
