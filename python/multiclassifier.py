@@ -6,10 +6,7 @@ import matplotlib.pyplot as plt
 import matplotlib.style as style
 import seaborn as sns
 import json
-import cv2
 import pandas as pd
-import shutil
-from sklearn import svm
 from sklearn.model_selection import train_test_split
 from tensorflow.keras.utils import to_categorical
 

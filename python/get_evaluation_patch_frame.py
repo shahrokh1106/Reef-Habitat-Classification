@@ -490,11 +490,10 @@ def get_patch_model_evaluations(patch_dataset_name,patch_model_name,patch_model_
 
 if __name__ == '__main__':
 
-
-    # frame_dataset_name= "frame7_dataset_cleaned"
-    # frame_model_name = "inception"
-    # frame_model_path = os.path.join("trained_classifiers","frame_classifier", "frame_classifer.h5")
-    # get_frame_model_evaluations(frame_dataset_name,frame_model_name,frame_model_path)
+    frame_dataset_name= "frame7_dataset_cleaned"
+    frame_model_name = "inception"
+    frame_model_path = os.path.join("trained_classifiers","frame_classifier", "frame_classifer.h5")
+    get_frame_model_evaluations(frame_dataset_name,frame_model_name,frame_model_path)
     
     patch_dataset_name = "patches"
     patch_model_name = "convnextB"

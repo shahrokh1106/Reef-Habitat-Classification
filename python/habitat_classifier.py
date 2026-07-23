@@ -1006,11 +1006,11 @@ if __name__ == '__main__':
     image_path_5 = os.path.join("GOPR9437.JPG")
 
 
-    # make_fig_example_for_paper(HClassifier,image_path_1,output_name = "1")
-    make_fig_example_for_paper(HClassifier,image_path_2,output_name = "2")
-    make_fig_example_for_paper(HClassifier,image_path_3,output_name = "3")
-    make_fig_example_for_paper(HClassifier,image_path_4,output_name = "4")
-    make_fig_example_for_paper(HClassifier,image_path_5,output_name = "5")
+    make_fig_example_for_paper(HClassifier,image_path_1,output_name = "1")
+    # make_fig_example_for_paper(HClassifier,image_path_2,output_name = "2")
+    # make_fig_example_for_paper(HClassifier,image_path_3,output_name = "3")
+    # make_fig_example_for_paper(HClassifier,image_path_4,output_name = "4")
+    # make_fig_example_for_paper(HClassifier,image_path_5,output_name = "5")
 
 
 

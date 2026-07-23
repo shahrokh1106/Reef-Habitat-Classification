@@ -22,3 +22,4 @@ myenv/
 robust_results/
 conf-experiments/
 .vscode
+python/habitat_classifier.py
