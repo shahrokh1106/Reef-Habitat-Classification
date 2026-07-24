@@ -130,7 +130,7 @@ python dataset/python/split_frames_with_whole_annotations.py
 
 This writes images to `dataset/frames_with_whole_annotations/` and copies them into `dataset/grouped_frames_with_whole_annotations/{class}/`.
 
-Organize those class folders into `dataset/frame7_dataset_cleaned/` with `train/`, `val/`, and `test/` splits. **No script in this repo creates `frame7_dataset_cleaned/`** — arrange the split locally (or use a prepared copy of the dataset).
+Organize those class folders into `dataset/frame7_dataset_cleaned/` with `train/`, `val/`, and `test/` splits. 
 
 ---
 
@@ -155,3 +155,25 @@ python dataset/python/plot_label_frequencies_frame_dataset.py
 ```
 
 Saves label frequency plots to `dataset/figs_dataset_analysis/`.
+
+---
+
+## Rule-based classifier evaluation dataset
+
+This dataset supports **end-to-end evaluation** of the full Habibot pipeline (frame + patch + urchin detector + rule-based fusion). It is separate from the frame and patch training data.
+
+Download the archive
+
+**[final_dataset.rar (Google Drive)](https://drive.google.com/file/d/1CN2wHIh65n7N0Dorn4fz9eYwzFeEVz_2/view?usp=sharing)**
+
+After extracting, you should have:
+
+```text
+dataset/final_dataset/  # evaluation images 
+```
+
+---
+
+## Note
+
+If any images were not able to download from the annotation CSVs because of broken URLs, or you get different frequencies than reported in the paper, please contact **Dr. Shahrokh Heidari** ([shahrokh.heidari@auckland.ac.nz](mailto:shahrokh.heidari@auckland.ac.nz)) to obtain missing images or a complete copy of the requested dataset.

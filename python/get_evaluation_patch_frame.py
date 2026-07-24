@@ -464,11 +464,11 @@ def get_patch_model_evaluations(patch_dataset_name,patch_model_name,patch_model_
     #     dataset=MyClassifier.test_ds,   # (image, onehot)
     #     idx2name=i_to_c,
     #     out_dir=out_dir,
-    #     gap_layer_name="global_average_pooling2d",  # from your summary
+    #     gap_layer_name="global_average_pooling2d",  
     #     target_mode="pred",                         # or "true"
-    #     limit=None,                                 # set small int while debugging
+    #     limit=None,                                
     #     alpha=0.45,
-    #     device="/GPU:0"                             # switch to "/CPU:0" if CUDA misbehaves
+    #     device="/GPU:0"                             
     # )
     
     y_pred = model.predict(test_dataset)

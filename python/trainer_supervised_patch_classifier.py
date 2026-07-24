@@ -54,8 +54,7 @@ if __name__ == '__main__':
     patches_path = os.path.join(".","dataset","patches")
 
     model_names = ["inception","efficient", "efficientL", "resnet","convnextB","convnextS","xception","densenet","inception_resnet"]
-    
-    model_names = "convnextB"
+    model_names = ["convnextB"]
     backbone_finder (model_names,patches_path, output_path)
 
     

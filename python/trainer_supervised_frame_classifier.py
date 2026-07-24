@@ -466,18 +466,6 @@ if __name__ == '__main__':
         get_learning_curves(history,evaluation_path,model_name)
         print("TESTING DONE! AND THE RESULTS HAVE BENN SAVED IN: ", evaluation_path)
 
-
-    # convnextb = [0.89, 0.67, 0.87, 0.85, 0.81]
-    # convnexts = [0.83, 0.69, 0.88, 0.82, 0.75]
-    # densenet = [0.88, 0.71, 0.90, 0.83, 0.82]
-    # efficientnet = [0.91, 0.74, 0.91, 0.83, 0.82]
-    # efficientnetl =  [0.92, 0.75, 0.90, 0.83, 0.83]
-    # inception = [0.86, 0.71, 0.91, 0.84, 0.79]
-    # inception_resnet = [0.87, 0.65, 0.88, 0.81, 0.77]
-    # resnet = [0.88, 0.74, 0.90, 0.84, 0.81]
-    # xception = [0.85, 0.67, 0.87, 0.79, 0.74]
-
-    # print(np.average(convnextb),np.average(convnexts),np.average(densenet),np.average(efficientnet),np.average(efficientnetl),np.average(inception), np.average(inception_resnet),np.average(resnet), np.average(xception))
     
     
 

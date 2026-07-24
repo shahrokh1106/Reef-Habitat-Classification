@@ -65,3 +65,55 @@ If setup is correct, the script loads the frame classifier, patch classifier, an
 ### 7. Download and prepare datasets (training and evaluation)
 
 To download annotation data, build train/validation/test splits, and prepare frame and patch datasets for training or evaluation, see **[DATASET.md](DATASET.md)**.
+
+### 8. Train frame and patch classifiers (optional)
+
+Requires prepared datasets ([DATASET.md](DATASET.md)). Run from the repository root.
+
+**Patch classifier**
+
+```bash
+python python/trainer_supervised_patch_classifier.py
+```
+
+As in the paper, training drops `Mobile invertebrate`, `Unscorable`, and `Sessile invertebrate community`, and merges `Bare rock`, `Turf`, `Encrusting algae`, and `Filamentous algae` into **grazed rock** (later **BrLfa** in the Habibot pipeline; see `remove_classes` and `to_be_combined` in `trainer_supervised_patch_classifier.py`).
+
+By default the script trains **`convnextB`** with **`full_training_flag=True`**. Output: `backbone_selection_results_patch/best_backbone_full_training/convnextB/`
+
+To compare backbones as in the paper, set `model_names` to  
+`["inception","efficient", "efficientL", "resnet","convnextB","convnextS","xception","densenet","inception_resnet"]` and **`full_training_flag=False`** in `backbone_finder()`.
+
+**Frame classifier**
+
+```bash
+python python/trainer_supervised_frame_classifier.py
+```
+
+As in the paper, training uses five classes from `dataset/frame7_dataset_cleaned/`.
+
+By default the script trains **`inception_resnet`** with **`full_training=True`**. Output: `backbone_selection_results_frame/best_backbone_full_training/inception_resnet/`
+
+To compare backbones as in the paper, set `model_names` to  
+`["inception","efficient", "efficientL", "resnet","convnextB","convnextS","xception","densenet","inception_resnet"]` and **`full_training=False`** in the `if __name__ == '__main__':` block.
+
+### 9. Evaluate frame and patch classifiers
+
+You need the **test splits** from [DATASET.md](DATASET.md) (`dataset/patches/` and `dataset/frame7_dataset_cleaned/`) and **trained weights** from step 5 (or your own `.h5` from step 8). Point `frame_model_path` and `patch_model_path` in `python/get_evaluation_patch_frame.py` at your files (defaults expect `trained_classifiers/`).
+
+From the repository root:
+
+```bash
+python python/get_evaluation_patch_frame.py
+```
+
+**Frame classifier (default in script)**
+
+- Data: `dataset/frame7_dataset_cleaned/` (test split)
+- Model: `frame_model_name = "inception"`, weights path set by `frame_model_path`
+- Output (next to the `.h5` file): `classification_report_frame_classifier_inception.png`, `confusion_matrix_frame_classifier_inception.png`, plus accuracy and macro-averaged metrics printed to the terminal
+
+**Patch classifier (default in script)**
+
+- Data: `dataset/patches/` (test split; same class removal/merge as training)
+- Model: `patch_model_name = "convnextB"`, weights path set by `patch_model_path`
+- Output (next to the `.h5` file): `classification_report_patch_classifier_convnextB.png`, `confusion_matrix_patch_classifier_convnextB.png`, plus accuracy and macro-averaged metrics printed to the terminal
