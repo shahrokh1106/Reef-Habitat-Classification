@@ -140,6 +140,3 @@ Compares stored fusion **Recommendation** labels to expert ground truth (**290**
   <img src="./fig/fig_reef_partial_barren_rules.png" alt="Reef partial barren example" width="48%" />
   <img src="./fig/fig_reef_partial_grazed_rules.png" alt="Reef partial grazed example" width="48%" />
 </p>
-<p align="center">
-  <img src="./fig/test_input.JPG" alt="Example input frame" width="48%" />
-</p>
