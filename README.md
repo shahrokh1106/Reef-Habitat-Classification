@@ -117,3 +117,13 @@ python python/get_evaluation_patch_frame.py
 - Data: `dataset/patches/` (test split; same class removal/merge as training)
 - Model: `patch_model_name = "convnextB"`, weights path set by `patch_model_path`
 - Output (next to the `.h5` file): `classification_report_patch_classifier_convnextB.png`, `confusion_matrix_patch_classifier_convnextB.png`, plus accuracy and macro-averaged metrics printed to the terminal
+
+### 10. Evaluate rule-based classifier (Eval-Frame-295)
+
+Prepare **`dataset/Eval-Frame-295/`** and **`User_Agreement_3.csv`** — see **[DATASET.md](DATASET.md)** (Rule-based classifier evaluation dataset).
+
+```bash
+python python/evaluate_295.py
+```
+
+Compares stored fusion **Recommendation** labels to expert ground truth (**290** images; **5** with no agreement excluded). Writes plots and metrics to **`results_295/`**.

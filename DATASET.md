@@ -164,12 +164,13 @@ This dataset supports **end-to-end evaluation** of the full Habibot pipeline (fr
 
 Download the archive
 
-**[final_dataset.rar (Google Drive)](https://drive.google.com/file/d/1ff87V0ObiZpSFNeMxpVCUzpmttPJwQc9/view?usp=sharing)**
+**[Eval-Frame-295.rar (Google Drive)](https://drive.google.com/file/d/1AX5GM2wWlr07yMGYpgdYX9T9LKkporSA/view?usp=sharing)**
 
 After extracting, you should have:
 
 ```text
-dataset/final_dataset/  # evaluation images 
+dataset/Eval-Frame-295/                              # 295 evaluation images
+dataset/dataset_csv_files/User_Agreement_3.csv       # expert labels and fusion recommendations
 ```
 
 ---
