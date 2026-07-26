@@ -76,7 +76,7 @@ Requires prepared datasets ([DATASET.md](DATASET.md)). Run from the repository r
 python python/trainer_supervised_patch_classifier.py
 ```
 
-As in the paper, training drops `Mobile invertebrate`, `Unscorable`, and `Sessile invertebrate community`, and merges `Bare rock`, `Turf`, `Encrusting algae`, and `Filamentous algae` into **grazed rock** (later **BrLfa** in the Habibot pipeline; see `remove_classes` and `to_be_combined` in `trainer_supervised_patch_classifier.py`).
+As in the paper, training drops `Mobile invertebrate`, `Unscorable`, and `Sessile invertebrate community`, and merges `Bare rock`, `Turf`, `Encrusting algae`, and `Filamentous algae` into **grazed rock** (later renamed to **BrLfa**; see `remove_classes` and `to_be_combined` in `trainer_supervised_patch_classifier.py`).
 
 By default the script trains **`convnextB`** with **`full_training_flag=True`**. Output: `backbone_selection_results_patch/best_backbone_full_training/convnextB/`
 
