@@ -120,10 +120,26 @@ python python/get_evaluation_patch_frame.py
 
 ### 10. Evaluate rule-based classifier (Eval-Frame-295)
 
-Prepare **`dataset/Eval-Frame-295/`** and **`User_Agreement_3.csv`** — see **[DATASET.md](DATASET.md)** (Rule-based classifier evaluation dataset).
+Prepare **`dataset/Eval-Frame-295/`**; see **[DATASET.md](DATASET.md)** (Rule-based classifier evaluation dataset).
 
 ```bash
 python python/evaluate_295.py
 ```
 
 Compares stored fusion **Recommendation** labels to expert ground truth (**290** images; **5** with no agreement excluded). Writes plots and metrics to **`results_295/`**.
+
+---
+
+## Example rule-based outputs
+
+<p align="center">
+  <img src="./fig/fig_reef_urchin_barren_rules.png" alt="Reef urchin barren example" width="48%" />
+  <img src="./fig/fig_reef_grazed_rules.png" alt="Reef grazed example" width="48%" />
+</p>
+<p align="center">
+  <img src="./fig/fig_reef_partial_barren_rules.png" alt="Reef partial barren example" width="48%" />
+  <img src="./fig/fig_reef_partial_grazed_rules.png" alt="Reef partial grazed example" width="48%" />
+</p>
+<p align="center">
+  <img src="./fig/test_input.JPG" alt="Example input frame" width="48%" />
+</p>
