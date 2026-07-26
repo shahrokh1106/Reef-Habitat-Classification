@@ -86,21 +86,12 @@ def get_confusion_matrix_plot(label_pred_list, label_truth_list, path, model_nam
     plt.close()
 
 
-def load_expert_truth_by_image():
-    xlsx_path = os.path.join("dataset", "dataset_csv_files", "User_Agreement_2.xlsx")
-    xlsx = pd.read_excel(xlsx_path).iloc[:329]
-    xlsx = xlsx[xlsx["Unnamed: 3"].to_numpy() != "*"]
-    xlsx = xlsx[xlsx["Incorrect Recommendation Condition"] != 4]
-    return xlsx.set_index("Image Name")["Unnamed: 13"]
-
-
 if __name__ == "__main__":
     csv_path = os.path.join("dataset", "dataset_csv_files", "User_Agreement_3.csv")
     results_dir = "results_295"
     os.makedirs(results_dir, exist_ok=True)
 
     df = pd.read_csv(csv_path)
-    expert_truth = load_expert_truth_by_image()
 
     print("Total images in User_Agreement_3.csv:", len(df))
 
@@ -111,7 +102,6 @@ if __name__ == "__main__":
     incorrect_predictions_num = 0
 
     for _, row in df.iterrows():
-        image_name = row["Image Name"]
         correct_rec = row["Correct Recommendation"]
 
         if is_no_agreement(correct_rec):
@@ -121,11 +111,11 @@ if __name__ == "__main__":
         pred = row["Recommendation"]
         new_preds.append(pred)
 
+        truth = row["Expert ground truth"]
+        labels.append(truth)
         if is_true(correct_rec):
-            labels.append(pred)
             correct_predictions_num += 1
         else:
-            labels.append(expert_truth.loc[image_name])
             incorrect_predictions_num += 1
 
     print("Images with Correct Recommendation = No agreement:", no_agreement_num)
