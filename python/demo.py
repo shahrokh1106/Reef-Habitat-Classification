@@ -1,31 +1,53 @@
 import os
-import glob
 import numpy as np
 import random
 import cv2
-from tensorflow.keras.applications.inception_v3 import preprocess_input as preprocess_input_inception
-import random
-import numpy as np
+from tensorflow.keras import layers
+from tensorflow.keras.applications.inception_resnet_v2 import (
+    preprocess_input as preprocess_input_inception_resnet_v2,
+)
+from tensorflow.keras.applications.convnext import preprocess_input as preprocess_input_convnext
 import tensorflow as tf
 import tensorflow_addons as tfa
-from tqdm import tqdm 
 from get_yolo_model import GetYoloModel
 import matplotlib
 import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
-
 SEED = 2
 random.seed(SEED)
 np.random.seed(SEED)
 tf.random.set_seed(SEED)
 
-class Habibot():
+
+class LayerScale(layers.Layer):
+    """Required when loading ConvNeXt patch_classifier.h5."""
+
+    def __init__(self, init_values, projection_dim, **kwargs):
+        super().__init__(**kwargs)
+        self.init_values = init_values
+        self.projection_dim = projection_dim
+
+    def build(self, input_shape):
+        self.gamma = tf.Variable(self.init_values * tf.ones((self.projection_dim,)))
+
+    def call(self, x):
+        return x * self.gamma
+
+    def get_config(self):
+        cfg = super().get_config()
+        cfg.update(
+            {"init_values": self.init_values, "projection_dim": self.projection_dim}
+        )
+        return cfg
+
+
+class Habibot():    
     def __init__(self,frame_classifier_path,patch_classifier_path,crop_ratio):
         self.frame_classifier_path = frame_classifier_path
         self.patch_classifier_path = patch_classifier_path
-        self.frame_classifier = self.load_classifier(self.frame_classifier_path)
+        self.frame_classifier = self.load_frame_classifier(self.frame_classifier_path)
         self.frame_input_size = self.frame_classifier.input.shape[1]
-        self.patch_classifier = self.load_classifier(self.patch_classifier_path)
+        self.patch_classifier = self.load_patch_classifier(self.patch_classifier_path)        
         self.patch_input_size = self.patch_classifier.input.shape[1]
         self.urch_detector = self.load_urchin_detector()
         self.i_to_c_frame = {0: "Reef-Urchin-Barren", 1: "Reef-BrLfa",2: "Reef-Kelp", 3: "Reef-FnEc",4: "Unconsolidated"}
@@ -35,10 +57,20 @@ class Habibot():
         self.crop_ratio = crop_ratio
         self.patch_conf_threshold = 0.7
 
-    def load_classifier(self,path):
-        model = tf.keras.models.load_model(path)
-        return model
-    
+    def load_frame_classifier(self, path):
+        return tf.keras.models.load_model(path, compile=False)
+
+    def load_patch_classifier(self, path):
+        custom_objects = {
+            "LayerScale": LayerScale,
+            "F1Score": tfa.metrics.F1Score,
+        }
+        try:
+            return tf.keras.models.load_model(
+                path, compile=False, custom_objects=custom_objects
+            )
+        except Exception:
+            return tf.keras.models.load_model(path, compile=False)
     def load_urchin_detector(self):
         model = GetYoloModel()
         return model
@@ -58,7 +90,8 @@ class Habibot():
         image = tf.convert_to_tensor(image)
         image = tf.image.resize(image, (self.frame_input_size, self.frame_input_size))
         image = tf.expand_dims(image, axis=0)
-        image = preprocess_input_inception(image)
+        image = tf.cast(image, tf.float32)
+        image = preprocess_input_inception_resnet_v2(image)        
         frame_probs = self.frame_classifier.predict(image,verbose = "0")
         return frame_probs
     
@@ -85,12 +118,12 @@ class Habibot():
                     centers.append((x_center, y_center))
             return image,patches,boxes,centers
         
-        def preprocess_patches (patches,model_image_size):
+        def preprocess_patches(patches, model_image_size):
             patches = tf.convert_to_tensor(patches)
             patches = tf.image.resize(patches, [model_image_size, model_image_size])
-            patches = preprocess_input_inception(patches)  
-            return patches
-       
+            patches = tf.cast(patches, tf.float32)
+            patches = preprocess_input_convnext(patches)
+            return patches       
         image = self.load_prepare_image(image)
         img,patches,boxes,centers = extract_grid_patches(image)
         patches_array = np.stack(patches, axis=0)
@@ -144,7 +177,7 @@ class Habibot():
         frame = cv2.resize(frame, (3648, 2736))
         i_to_c_frame = {0: "Reef-Urchin-Barren", 1: "Reef-Grazed",2: "Reef-Kelp", 3: "Reef-Vegetated",4: "Unconsolidated"}
         i_to_c_frame = {0: "Reef-Urchin-Barren", 1: "Reef-BrLfa",2: "Reef-Kelp", 3: "Reef-FnEc",4: "Unconsolidated"} # renaming to the updated class names
-        patch_conf_threshold = 0.7
+        patch_conf_threshold = self.patch_conf_threshold        
         img,patches_boxes,patches_centers,patches_pred_ratios_dict,patches_preds_categorial,patches_probs,frame_probs,urchin_boxes = self.get_all_models_predictions(frame)
 
         patch_classes = [f'Carpophyllum ({np.round(patches_pred_ratios_dict["Carpophyllum"],1)}%)',
@@ -283,8 +316,12 @@ class Habibot():
 
 
 if __name__ == '__main__':
-    frame_classifier_path =  os.path.join("trained_classifiers_", "frame_classifier")
-    patch_classifier_path = os.path.join("trained_classifiers_","patch_classifier")
+    frame_classifier_path = os.path.join(
+        "trained_classifiers", "frame_classifier", "frame_classifer.h5"
+    )
+    patch_classifier_path = os.path.join(
+        "trained_classifiers", "patch_classifier", "patch_classifier.h5"
+    )    
     HClassifier = Habibot(frame_classifier_path =frame_classifier_path,
                                     patch_classifier_path = patch_classifier_path,
                                     crop_ratio= 0.2)
