@@ -51,8 +51,8 @@ Pre-trained weights are **not** included in this repository. Download the archiv
 After extracting, you should have:
 
 ```
-trained_classifiers_/frame_classifier/    # frame_classifier.h5
-trained_classifiers_/patch_classifier/    # patch_classifier.h5
+trained_classifiers/frame_classifier/    # frame_classifier.h5
+trained_classifiers/patch_classifier/    # patch_classifier.h5
 ```
 
 ### 6. Verify the installation

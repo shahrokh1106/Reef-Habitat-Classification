@@ -171,12 +171,108 @@ class Habibot():
         frame_probs = self.get_frame_level_prediction_probs(img)
         return img,patches_boxes,patches_centers,patches_pred_ratios_dict,patches_preds_categorial,patches_probs,frame_probs,urchin_boxes
 
+    def apply_recommendation_rules(
+        self,
+        frame_probs,
+        patches_pred_ratios_dict,
+        urchin_boxes,
+    ):
+        """
+        Frame argmax + Urchin rules (#1–#2) and patch/rule-based recommendation (#3–#12).
+        Returns (frame_label_after_urchin_rules, recommendation, rule_numbers).
+        """
+        frame_probs = np.asarray(frame_probs)
+        initial_frame_level_prediction = self.i_to_c_frame[int(np.argmax(frame_probs))]
+        rule_numbers = []
+        recommendation = "None"
+
+        if initial_frame_level_prediction == "Reef-BrLfa":
+            if len(urchin_boxes) > 0:
+                initial_frame_level_prediction = "Reef-Urchin-Barren"
+                rule_numbers.append("#1")
+        elif initial_frame_level_prediction == "Reef-Urchin-Barren":
+            if len(urchin_boxes) == 0:
+                initial_frame_level_prediction = "Reef-BrLfa"
+                rule_numbers.append("#2")
+
+        if np.max(frame_probs) <= 0.6:
+            if len(urchin_boxes) == 0:
+                recommendation = "Reef-Partial-BrLfa"
+                rule_numbers.append("#3")
+            else:
+                recommendation = "Reef-Partial-Urchin-Barren"
+                rule_numbers.append("#4")
+        elif initial_frame_level_prediction == "Reef-Kelp":
+            if len(urchin_boxes) > 0:
+                recommendation = "Reef-Partial-Urchin-Barren"
+                rule_numbers.append("#5")
+            elif (
+                patches_pred_ratios_dict["BrLfa"] > 25
+                and len(urchin_boxes) == 0
+            ):
+                recommendation = "Reef-Partial-BrLfa"
+                rule_numbers.append("#6")
+        elif initial_frame_level_prediction == "Reef-FnEc":
+            if len(urchin_boxes) > 0:
+                recommendation = "Reef-Partial-Urchin-Barren"
+                rule_numbers.append("#7")
+            elif (
+                patches_pred_ratios_dict["BrLfa"] > 25
+                and len(urchin_boxes) == 0
+            ):
+                recommendation = "Reef-Partial-BrLfa"
+                rule_numbers.append("#8")
+        elif initial_frame_level_prediction == "Reef-Urchin-Barren":
+            if (
+                patches_pred_ratios_dict["Carpophyllum"]
+                + patches_pred_ratios_dict["Ecklonia"]
+                + patches_pred_ratios_dict["Other canopy"]
+                + patches_pred_ratios_dict["Foliose algae"]
+                > 25
+            ):
+                recommendation = "Reef-Partial-Urchin-Barren"
+                rule_numbers.append("#9")
+        elif initial_frame_level_prediction == "Reef-BrLfa":
+            if (
+                patches_pred_ratios_dict["Carpophyllum"]
+                + patches_pred_ratios_dict["Ecklonia"]
+                + patches_pred_ratios_dict["Other canopy"]
+                + patches_pred_ratios_dict["Foliose algae"]
+                > 25
+            ):
+                recommendation = "Reef-Partial-BrLfa"
+                rule_numbers.append("#10")
+        elif initial_frame_level_prediction == "Unconsolidated":
+            if len(urchin_boxes) > 0:
+                recommendation = "Reef-Partial-Urchin-Barren"
+                rule_numbers.append("#11")
+
+        if recommendation == "None":
+            recommendation = initial_frame_level_prediction
+            rule_numbers.append("#12")
+
+        return initial_frame_level_prediction, recommendation, rule_numbers
+
+    def recommend_from_rgb(self, frame_rgb):
+        """Run full demo inference on an RGB frame (3648×2736) and return labels."""
+        (
+            _img,
+            _pb,
+            _pc,
+            patches_pred_ratios_dict,
+            _ppc,
+            _pprobs,
+            frame_probs,
+            urchin_boxes,
+        ) = self.get_all_models_predictions(frame_rgb)
+        return self.apply_recommendation_rules(
+            frame_probs, patches_pred_ratios_dict, urchin_boxes
+        )
+
     def get_recommendation(self,image_path,output_name):
         frame = cv2.imread(image_path)
         frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         frame = cv2.resize(frame, (3648, 2736))
-        i_to_c_frame = {0: "Reef-Urchin-Barren", 1: "Reef-Grazed",2: "Reef-Kelp", 3: "Reef-Vegetated",4: "Unconsolidated"}
-        i_to_c_frame = {0: "Reef-Urchin-Barren", 1: "Reef-BrLfa",2: "Reef-Kelp", 3: "Reef-FnEc",4: "Unconsolidated"} # renaming to the updated class names
         patch_conf_threshold = self.patch_conf_threshold        
         img,patches_boxes,patches_centers,patches_pred_ratios_dict,patches_preds_categorial,patches_probs,frame_probs,urchin_boxes = self.get_all_models_predictions(frame)
 
@@ -188,7 +284,9 @@ class Habibot():
                         f'Urchin',
                         f'BrLfa ({np.round(patches_pred_ratios_dict["BrLfa"],1)}%)',
                         ]
-        initial_frame_level_prediction = i_to_c_frame[np.argmax(frame_probs)]
+        initial_frame_level_prediction, recommendation, rule_numbers = self.apply_recommendation_rules(
+            frame_probs, patches_pred_ratios_dict, urchin_boxes
+        )
         cmap = matplotlib.colormaps.get_cmap('tab10')
         # cmap = get_cmap('tab10') 
         colors = [cmap(i) for i in range(len(patch_classes))]
@@ -213,57 +311,6 @@ class Habibot():
             x2 = x1+int(urchin_boxes[i][2])
             y2 = y1+ int(urchin_boxes[i][3])
             cv2.rectangle(img, (x1, y1), (x2, y2), (0,0,0),5)
-        rule_numbers = []
-
-        recommendation = "None"
-        # Initial label conversion
-        if initial_frame_level_prediction == "Reef-BrLfa":
-            if len(urchin_boxes)>0:
-                initial_frame_level_prediction = "Reef-Urchin-Barren"
-                rule_numbers.append("#1")
-        elif initial_frame_level_prediction == "Reef-Urchin-Barren":
-            if len(urchin_boxes)==0:
-                initial_frame_level_prediction = "Reef-BrLfa"
-                rule_numbers.append("#2")
-
-        # rules-based label conversion
-        if np.max(frame_probs)<=0.6:
-            if len(urchin_boxes)==0:
-                recommendation = "Reef-Partial-BrLfa"
-                rule_numbers.append("#3")
-            else:
-                recommendation = "Reef-Partial-Urchin-Barren"
-                rule_numbers.append("#4")
-        elif initial_frame_level_prediction == "Reef-Kelp":
-            if len(urchin_boxes)>0: 
-                recommendation = "Reef-Partial-Urchin-Barren"
-                rule_numbers.append("#5")
-            elif (patches_pred_ratios_dict['BrLfa']>25 and len(urchin_boxes)==0):
-                recommendation = "Reef-Partial-BrLfa"
-                rule_numbers.append("#6")
-        elif initial_frame_level_prediction == "Reef-FnEc":
-            if len(urchin_boxes)>0:  
-                recommendation = "Reef-Partial-Urchin-Barren"
-                rule_numbers.append("#7")
-            elif (patches_pred_ratios_dict['BrLfa']>25 and len(urchin_boxes)==0):
-                    recommendation = "Reef-Partial-BrLfa"
-                    rule_numbers.append("#8")
-        elif initial_frame_level_prediction == "Reef-Urchin-Barren":
-            if patches_pred_ratios_dict['Carpophyllum']+patches_pred_ratios_dict['Ecklonia']+patches_pred_ratios_dict['Other canopy']+patches_pred_ratios_dict['Foliose algae']>25:
-                recommendation = "Reef-Partial-Urchin-Barren"
-                rule_numbers.append("#9")
-        elif initial_frame_level_prediction == "Reef-BrLfa":
-            if patches_pred_ratios_dict['Carpophyllum']+patches_pred_ratios_dict['Ecklonia']+patches_pred_ratios_dict['Other canopy']+patches_pred_ratios_dict['Foliose algae']>25:
-                recommendation = "Reef-Partial-BrLfa"
-                rule_numbers.append("#10")
-        elif  initial_frame_level_prediction == "Unconsolidated":
-            if len(urchin_boxes)>0:
-                recommendation = "Reef-Partial-Urchin-Barren"
-                rule_numbers.append("#11")
-
-        if recommendation=="None":
-            recommendation = initial_frame_level_prediction
-            rule_numbers.append("#12")
 
         fig, ax = plt.subplots(figsize=(15, 13)) 
         fig.patch.set_facecolor("black")  # Set figure background color
