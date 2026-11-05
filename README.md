@@ -6,6 +6,17 @@ Rapid, scalable assessment of temperate rocky reef habitats is essential for det
   <img src="./fig/g-abstract.png" alt="Graphical abstract" width="900">
 </p>
 
+## Example rule-based outputs
+
+<p align="center">
+  <img src="./fig/fig_reef_urchin_barren_rules.png" alt="Reef urchin barren example" width="48%" />
+  <img src="./fig/fig_reef_grazed_rules.png" alt="Reef grazed example" width="48%" />
+</p>
+<p align="center">
+  <img src="./fig/fig_reef_partial_barren_rules.png" alt="Reef partial barren example" width="48%" />
+  <img src="./fig/fig_reef_partial_grazed_rules.png" alt="Reef partial grazed example" width="48%" />
+</p>
+
 ## Installation
 
 ### 1. Clone Habibot
@@ -118,6 +129,21 @@ python python/get_evaluation_patch_frame.py
 - Model: `patch_model_name = "convnextB"`, weights path set by `patch_model_path`
 - Output (next to the `.h5` file): `classification_report_patch_classifier_convnextB.png`, `confusion_matrix_patch_classifier_convnextB.png`, plus accuracy and macro-averaged metrics printed to the terminal
 
+**Patch classifier on test-ex (held-out campaigns)**
+
+For location-level generalisation, evaluate on the **test-ex** split: patches from campaigns withheld during train/validation/test construction ([DATASET.md](DATASET.md), `test_ex_df.csv` → `dataset/patches/test_extra/`). You need the full patch tree (`train/`, `valid/`, `test/`, and `test_extra/`) and the same **trained weights** as above. Edit `TEST_EXTRA_PATH` and `PATCHES_ROOT_PATH` at the top of `python/get_evaluation_patch_extra.py` if your patches are not under `dataset/patches/`.
+
+From the repository root:
+
+```bash
+python python/get_evaluation_patch_extra.py
+```
+
+- Data: `test_extra` under `PATCHES_ROOT_PATH` (class removal/merge matches training); `PATCHES_ROOT_PATH` is used only to align label indices with the trained model
+- Model: `patch_model_name = "convnextB"`, weights path set by `patch_model_path` (default `trained_classifiers/patch_classifier/patch_classifier.h5`)
+- Output (next to the `.h5` file): `classification_report_patch_classifier_convnextB_test_extra.png`, `classification_report_patch_classifier_convnextB_test_extra.csv` (metrics rounded to two decimals), `confusion_matrix_patch_classifier_convnextB_test_extra.png`, plus accuracy and macro-averaged metrics printed to the terminal
+- Optional diagnostics: `Carpophyllum_spp_incorrect/` copies misclassified *Carpophyllum spp.* patches and `Carpophyllum_spp_incorrect.csv` with predicted labels and softmax confidences
+
 ### 10. Evaluate rule-based classifier (Eval-Frame-295)
 
 Prepare **`dataset/Eval-Frame-295/`**; see **[DATASET.md](DATASET.md)** (Rule-based classifier evaluation dataset).
@@ -127,16 +153,3 @@ python python/evaluate_295.py
 ```
 
 Compares stored fusion **Recommendation** labels to expert ground truth (**290** images; **5** with no agreement excluded). Writes plots and metrics to **`results_295/`**.
-
----
-
-## Example rule-based outputs
-
-<p align="center">
-  <img src="./fig/fig_reef_urchin_barren_rules.png" alt="Reef urchin barren example" width="48%" />
-  <img src="./fig/fig_reef_grazed_rules.png" alt="Reef grazed example" width="48%" />
-</p>
-<p align="center">
-  <img src="./fig/fig_reef_partial_barren_rules.png" alt="Reef partial barren example" width="48%" />
-  <img src="./fig/fig_reef_partial_grazed_rules.png" alt="Reef partial grazed example" width="48%" />
-</p>
