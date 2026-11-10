@@ -21,8 +21,9 @@ random.seed(SEED)
 np.random.seed(SEED)
 tf.random.set_seed(SEED)
 
-TEST_EXTRA_PATH = r"E:\shah\habibot\patches\test_extra"
-PATCHES_ROOT_PATH = r"E:\shah\habibot\patches"
+REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+PATCHES_ROOT_PATH = os.path.join(REPO_ROOT, "dataset", "patches")
+TEST_EXTRA_PATH = os.path.join(PATCHES_ROOT_PATH, "test_extra")
 
 REMOVE_CLASSES = [
     "Mobile invertebrate",

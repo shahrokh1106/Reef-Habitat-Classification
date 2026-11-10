@@ -130,7 +130,11 @@ python dataset/python/split_frames_with_whole_annotations.py
 
 This writes images to `dataset/frames_with_whole_annotations/` and copies them into `dataset/grouped_frames_with_whole_annotations/{class}/`.
 
-Organize those class folders into `dataset/frame7_dataset_cleaned/` with `train/`, `val/`, and `test/` splits. 
+```bash
+# 3. Build dataset/frame7_dataset_cleaned/ from the published split manifest
+```
+
+Use **`dataset/dataset_csv_files/training_datasets/frame7_split_manifest.json`** to create the same **train / val / test** layout as in the paper: for each split and class folder, copy (or symlink) each listed filename from your grouped or downloaded frames into `dataset/frame7_dataset_cleaned/{split}/{class_folder}/`.
 
 ---
 
