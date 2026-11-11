@@ -51,7 +51,7 @@ def plot_original_dataset(dataset_path,fontsize=20, fig_name = "frequency"):
         )
     plt.xlabel('Frequency',fontsize=fontsize)
     plt.xticks(fontsize=fontsize-3)
-    plt.yticks(fontsize=fontsize-3)
+    plt.yticks(fontsize=fontsize+3)
     plt.title('Class frequency in the frame dataset', fontsize=fontsize,pad=25)
     for bar in bars:
         plt.text(40, 
@@ -127,7 +127,22 @@ def plot_traning_dataset_combined(dataset_path,fontsize=20,fig_name="frequency")
     plt.tight_layout()
     plt.savefig(os.path.join("dataset", "figs_dataset_analysis", fig_name+".png"))
     plt.close()
-    
+
+
+def save_figures_horizontally(fig_names, fig_name="frequency_side_by_side", gap=50):
+    from PIL import Image
+
+    figs_dir = os.path.join("dataset", "figs_dataset_analysis")
+    images = [Image.open(os.path.join(figs_dir, name+".png")).convert("RGB") for name in fig_names]
+    total_width = sum(img.width for img in images) + gap * (len(images) - 1)
+    max_height = max(img.height for img in images)
+    canvas = Image.new("RGB", (total_width, max_height), "white")
+    x_offset = 0
+    for img in images:
+        canvas.paste(img, (x_offset, (max_height - img.height) // 2))
+        x_offset += img.width + gap
+    canvas.save(os.path.join(figs_dir, fig_name+".png"))
+
 
 if __name__ == '__main__':
     fontsize = 40
@@ -137,4 +152,7 @@ if __name__ == '__main__':
         raise Exception ("Frames not found")
     plot_original_dataset(framem_dataset_path,fontsize=fontsize,fig_name="frame_dataset_label_frequency")
     plot_traning_dataset_combined(framem_dataset_path,fontsize=fontsize,fig_name="frame_dataset_label_frequency_splits")
+    save_figures_horizontally(
+        ["frame_dataset_label_frequency", "frame_dataset_label_frequency_splits"],
+        fig_name="frame_dataset_label_frequency_and_splits")
     

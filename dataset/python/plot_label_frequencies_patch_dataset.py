@@ -22,7 +22,7 @@ def combine_classes(sample_dict):
         'Urchin':sample_dict['Urchin'],
         'Unconsolidated':sample_dict['Unconsolidated'],
         'Other canopy forming macroalgae':sample_dict['Other canopy forming macroalgae'],
-        'Foliose algae':sample_dict['Foliose Algae'],
+        'Foliose algae':sample_dict['Foliose algae'],
         'Ecklonia radiata':sample_dict['Ecklonia radiata'],
         'Carpophyllum spp':sample_dict['Carpophyllum spp']
     })
@@ -30,7 +30,7 @@ def combine_classes(sample_dict):
 
 
 def plot_original_dataset(dataset_path,fontsize=20, fig_name = "frequency"):
-    fontsize = 30
+    fontsize = 35
     train_path = os.path.join(dataset_path, "train")
     val_path = os.path.join(dataset_path, "valid")
     test_path = os.path.join(dataset_path, "test")
@@ -40,6 +40,7 @@ def plot_original_dataset(dataset_path,fontsize=20, fig_name = "frequency"):
     dataset_dict = {}
     for key in train_dict.keys():
         dataset_dict.update({key:train_dict[key]+val_dict[key]+test_dict[key]})
+    dataset_dict["Sea urchin"] = dataset_dict.pop("Urchin")
 
     plt.style.use('default') 
     plt.rcParams['font.family'] = 'serif'  
@@ -52,9 +53,9 @@ def plot_original_dataset(dataset_path,fontsize=20, fig_name = "frequency"):
         plt.gca().get_yticklabels(),
         fontstyle='italic'
         )
-    plt.xlabel('Frequency',fontsize=fontsize)
-    plt.xticks(fontsize=fontsize-3)
-    plt.yticks(fontsize=fontsize-3)
+    plt.xlabel('Frequency',fontsize=fontsize-2)
+    plt.xticks(fontsize=fontsize-5)
+    plt.yticks(fontsize=fontsize-5)
     for bar in bars:
         plt.text(bar.get_width() + 0.1, 
                 bar.get_y() + bar.get_height()/2,  
@@ -77,7 +78,6 @@ def plot_original_dataset_combined(dataset_path, fontsize = 20, fig_name = "freq
     dataset_dict = {}
     for key in train_dict.keys():
         dataset_dict.update({key:train_dict[key]+val_dict[key]+test_dict[key]})
-
     dataset_dict_ = combine_classes(dataset_dict)
     dataset_dict_new = {}
     for key,value in dataset_dict_.items():
@@ -85,6 +85,8 @@ def plot_original_dataset_combined(dataset_path, fontsize = 20, fig_name = "freq
             key = 'Other canopy'
         if key=="Foliose Algae":
             key = "Foliose algae"
+        if key=="Urchin":
+            key = "Sea urchin"
         dataset_dict_new.update({key:value})
     
     colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
@@ -106,7 +108,7 @@ def plot_original_dataset_combined(dataset_path, fontsize = 20, fig_name = "freq
     plt.xlabel('Frequency',fontsize=fontsize)
     plt.title('Class frequency in the refined patch dataset', fontsize=fontsize,pad=20)
     plt.xticks(fontsize=fontsize-3)
-    plt.yticks(fontsize=fontsize-3)
+    plt.yticks(fontsize=fontsize+3)
     for bar in bars:
         plt.text(400, 
                 bar.get_y() + bar.get_height()/2,  
@@ -246,9 +248,24 @@ def plot_test_extra(dataset_path,fontsize =20, fig_name = "frequency"):
     plt.close()
 
 
+def save_figures_horizontally(fig_names, fig_name="frequency_side_by_side", gap=50):
+    from PIL import Image
+
+    figs_dir = os.path.join("dataset", "figs_dataset_analysis")
+    images = [Image.open(os.path.join(figs_dir, name+".png")).convert("RGB") for name in fig_names]
+    total_width = sum(img.width for img in images) + gap * (len(images) - 1)
+    max_height = max(img.height for img in images)
+    canvas = Image.new("RGB", (total_width, max_height), "white")
+    x_offset = 0
+    for img in images:
+        canvas.paste(img, (x_offset, (max_height - img.height) // 2))
+        x_offset += img.width + gap
+    canvas.save(os.path.join(figs_dir, fig_name+".png"))
+
 
 if __name__ == '__main__':
     fontsize = 40
+
     patch_dataset_path = os.path.join("dataset","patches")
     if not os.path.exists(patch_dataset_path):
         print("The image patches have not been created yet. Please run get_patches.py and make sure you first download the frames")
@@ -257,4 +274,7 @@ if __name__ == '__main__':
     plot_original_dataset(patch_dataset_path,fontsize=fontsize,fig_name="patch_dataset_label_frequency_org_all")
     plot_original_dataset_combined(patch_dataset_path,fontsize=fontsize,fig_name="patch_dataset_label_frequency_org_all_combined")
     plot_traning_dataset_combined(patch_dataset_path,fontsize=fontsize,fig_name="patch_dataset_label_frequency_splits_combined")
-    plot_test_extra(patch_dataset_path,fontsize=fontsize, fig_name = "patch_dataset_label_frequency_test_extra")
+    # plot_test_extra(patch_dataset_path,fontsize=fontsize, fig_name = "patch_dataset_label_frequency_test_extra")
+    save_figures_horizontally(
+        ["patch_dataset_label_frequency_org_all_combined", "patch_dataset_label_frequency_splits_combined"],
+        fig_name="patch_dataset_label_frequency_org_all_and_splits_combined")
