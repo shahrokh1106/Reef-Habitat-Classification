@@ -179,6 +179,29 @@ dataset/dataset_csv_files/User_Agreement_3.csv       # expert labels and fusion 
 
 ---
 
+## Test-Frame-365 evaluation dataset
+
+This set is used by `python/evaluate_365.py` to evaluate the frame classifier, patch classifier, urchin detector, and rule-based classifier on 365 expert-annotated frames.
+
+Download the archive
+
+**[Test-Frame-365.zip (Dropbox)](https://www.dropbox.com/scl/fi/1euucmmn2iezhl8eypmyo/Test-Frame-365.rar?rlkey=6fqwtlyegy756ly63vynxakcg&st=v1rx6p61&dl=0)**
+
+After extracting, place the folder at `dataset/Test-Frame-365/`. You should have:
+
+```text
+dataset/Test-Frame-365/
+  images/                      # 365 frames
+  Habitat_7_Class.xlsx         # expert habitat labels (expert-1, expert-2, expert-3) and agreement
+  habitat_7_stats.json         # class counts and expert-agreement summary
+  Test-Frame-365.json          # frame, patch, and urchin annotations
+  Test-Frame-365-stats.json    # annotation counts for frames, points, and urchins
+  time_keeping.json            # annotation and Habibot timing
+  vis.py                       # viewer for the annotations
+```
+
+---
+
 ## Note
 
 If any images were not able to download from the annotation CSVs because of broken URLs, or you get different frequencies than reported in the paper, please contact **Dr. Shahrokh Heidari** ([shahrokh.heidari@auckland.ac.nz](mailto:shahrokh.heidari@auckland.ac.nz)) to obtain missing images or a complete copy of the requested dataset.

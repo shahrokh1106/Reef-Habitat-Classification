@@ -153,3 +153,23 @@ python python/evaluate_295.py
 ```
 
 Compares stored fusion **Recommendation** labels to expert ground truth (**290** images; **5** with no agreement excluded). Writes plots and metrics to **`results_295/`**.
+
+### 11. Evaluate rule-based classifier (Test-Frame-365)
+
+Prepare **`dataset/Test-Frame-365/`**; see **[DATASET.md](DATASET.md)** (Test-Frame-365 evaluation dataset). Run from the repository root:
+
+```bash
+python python/evaluate_365.py --frame
+python python/evaluate_365.py --patch
+python python/evaluate_365.py --urchin
+python python/evaluate_365.py --rule
+python python/evaluate_365.py --all
+```
+
+`--frame`, `--patch`, and `--urchin` score all **365** images against the component annotations in `Test-Frame-365.json` (frame label, patch points, and urchin boxes). `--rule` scores the fused classifier against `Habitat_7_Class.xlsx`: the agreed label where all three experts match (`Check=True`, **281** images) in `results-365/rule/`, and each expert's own labels on all **365** images in `results-365/rule/Arie/`, `Kelsey/`, and `Celia/`. `--all` runs frame, patch, urchin, and then rule.
+
+Add `--debug` to any of those commands to save a ground-truth versus prediction figure for each image under that task's `debug/` folder. `--time` reads `time_keeping.json` and writes timing summaries to `results-365/stats_time.json`; it does not run the models.
+
+Outputs go to **`results-365/`** at the repository root (`frame/`, `patch/argmax/`, `patch/conf-cutoff/`, `urchin/`, and `rule/`), each with a classification report and a confusion matrix.
+
+**Eval-Frame-295 and Test-Frame-365 are different evaluations.** On Eval-Frame-295, Habibot's predictions were shown to the experts, who then agreed on a label; the script compares the stored recommendation with that agreement. Test-Frame-365 was labelled blind, without showing predictions. It also includes the component annotations, so the frame classifier, patch classifier, and urchin detector can be scored on their own as well as through the rule-based classifier.
